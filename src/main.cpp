@@ -239,8 +239,3 @@ void loop() {
   }
 }
 
-  if (isbusy && !doorphone.isBusy()) {
-    isbusy = false;
-    Serial.println("LOG: Call finished / Hangup.");
-  }
-}
