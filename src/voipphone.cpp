@@ -56,12 +56,21 @@ void VOIPPhone::dial(const char *number,const char *id) {
 //
 
 void VOIPPhone::loop(void) {
+  // Если указатель sip еще не создан (begin не вызывался), 
+  // мгновенно и безопасно выходим из функции, игнорируя loop
+  if (sip == NULL) {
+    return;
+  }
+
   if(WiFi.status() == WL_CONNECTED) {
     handleIncommingRTP();
     handleOutgoingRTP();
+    
+    // Теперь вызов защищен на 100%
     sip->HandleUdpPacket();
   }
 }
+
 
 void VOIPPhone::setMicGain(uint8_t gain) {
   mic_gain = gain;
