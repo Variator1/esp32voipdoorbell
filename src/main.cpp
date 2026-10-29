@@ -10,6 +10,7 @@
 #include "ClickButton.h"
 #include <TimeLib.h>
 #include "pages.h"
+#include <ArduinoJson.h>
 
 #define mDNSUpdate(c)  do {} while(0)
 using WebServerClass = WebServer;
@@ -76,39 +77,63 @@ void APICallback(WebServer *server) {
   });
 
   server->on("/settings.html", HTTPMethod::HTTP_GET, [server](){
-    server->send_P(200,mimeHTML,HTML_settings);
+    server->send_P(200, mimeHTML, HTML_settings);
   });
 
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
-    server->send_P(200,mimeCSS,CSS_styles);
+    server->send_P(200, mimeCSS, CSS_styles);
   });
 
   server->on("/main.js", HTTPMethod::HTTP_GET, [server](){
-    server->send_P(200,mimeJS,JS_main);
+    server->send_P(200, mimeJS, JS_main);
   });
   
   server->on("/datetime", HTTPMethod::HTTP_GET, [server](){
-    server->send(200, "text/plain", "Local Mode (No Internet)");
+    server->send(200, "text/plain", "Local Mode");
   });
 
-  server->on("/restart", HTTPMethod::HTTP_GET, [server](){
+  // ФИНАЛЬНЫЙ ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СОХРАНЕНИЯ
+  server->on("/config", HTTPMethod::HTTP_POST, [server](){
+    Serial.println("LOG: Получен запрос на сохранение настроек...");
+
+    // Ручной перехват текстовых полей (проверяем все возможные варианты имен из HTML)
+    if (server->hasArg("device_name")) strncpy(config.device_name, server->arg("device_name").c_str(), 32);
+    
+    if (server->hasArg("telnr_1")) strncpy(config.telnr_1, server->arg("telnr_1").c_str(), 32);
+    if (server->hasArg("telnr_2")) strncpy(config.telnr_2, server->arg("telnr_2").c_str(), 32);
+    if (server->hasArg("telnr_3")) strncpy(config.telnr_3, server->arg("telnr_3").c_str(), 32);
+    
+    if (server->hasArg("sip_ip"))  strncpy(config.sip_ip, server->arg("sip_ip").c_str(), 32);
+    if (server->hasArg("sip_gateway")) strncpy(config.sip_ip, server->arg("sip_gateway").c_str(), 32); // альтернативное имя
+    
+    if (server->hasArg("sip_user")) strncpy(config.sip_user, server->arg("sip_user").c_str(), 32);
+    if (server->hasArg("sip_user_name")) strncpy(config.sip_user, server->arg("sip_user_name").c_str(), 32);
+    
+    if (server->hasArg("sip_pass")) strncpy(config.sip_pass, server->arg("sip_pass").c_str(), 32);
+    if (server->hasArg("sip_password")) strncpy(config.sip_pass, server->arg("sip_password").c_str(), 32);
+
+    // Ручной перехват настроек звука
+    if (server->hasArg("amp_gain")) config.amp_gain = server->arg("amp_gain").toInt();
+    if (server->hasArg("mic_gain")) config.mic_gain = server->arg("mic_gain").toInt();
+    
+    if (server->hasArg("echocompensation")) {
+      config.echocompensation = (server->arg("echocompensation") == "true" || server->arg("echocompensation") == "1");
+    } else {
+      config.echocompensation = false;
+    }
+
+    // Принудительно сохраняем обновленную структуру в энергонезависимую память через ConfigManager
+    configManager.save(); 
+
+    // Отправляем красивый HTML-ответ в браузер
+    String response = "<html><head><meta charset='utf-8'><style>body{font-family:sans-serif;text-align:center;padding-top:50px;}</style></head>";
+    response += "<body><h2>Настройки SIP успешно сохранены!</h2>";
+    response += "<p>Плата перезагружается. Через 10 секунд она зарегистрируется на Yate-сервере: <b>" + String(config.sip_ip) + "</b></p></body></html>";
+    server->send(200, "text/html", response);
+    
+    Serial.println("LOG: Настройки сохранены. Перезапуск системы...");
+    delay(2000);
     ESP.restart();
-    server->send(200, "text/plain", "restarting...");
-  });
-
-  server->on("/dial1", HTTPMethod::HTTP_GET, [server](){
-    doorphone.dial(config.telnr_1,config.device_name);
-    server->send(200, "text/plain", "ok");
-  });
-
-  server->on("/dial2", HTTPMethod::HTTP_GET, [server](){
-    doorphone.dial(config.telnr_2,config.device_name);
-    server->send(200, "text/plain", "ok");
-  });
-
-  server->on("/dial3", HTTPMethod::HTTP_GET, [server](){
-    doorphone.dial(config.telnr_3,config.device_name);
-    server->send(200, "text/plain", "ok");
   });
 
   httpUpdate.setup(server);
@@ -125,7 +150,7 @@ void setup() {
 
   Serial.println("LOG: Pinmodes set, cleaning config strings...");
   // Жестко обнуляем массивы памяти, чтобы ConfigManager не читал мусор из NVS
-  memset(&config, 0, sizeof(Config));
+  //memset(&config, 0, sizeof(Config));
 
   strcpy(config.device_name, "Doorbell");
   strcpy(config.telnr_1, "100");
