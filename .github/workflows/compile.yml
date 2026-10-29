@@ -24,15 +24,17 @@ jobs:
     - name: Install PlatformIO
       run: pip install --upgrade platformio
 
-    - name: Run PlatformIO Build (App & Filesystem)
+    - name: Run PlatformIO Build (App, Filesystem & Merge)
       run: |
         pio run
         pio run --target buildfs
+        # Склеиваем загрузчик, разделы и приложение в один файл по адресу 0x0
+        pio run --target mergebin
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: esp32-voip-doorbell-bins
         path: |
-          .pio/build/**/firmware.bin
+          .pio/build/**/merged-firmware.bin
           .pio/build/**/spiffs.bin
