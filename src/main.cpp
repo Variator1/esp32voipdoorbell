@@ -119,18 +119,21 @@ void setup() {
   Serial.println();
   Serial.println("Startup Autonomous Mode...");
 
-  pinMode(4,INPUT_PULLUP);
-  pinMode(2,INPUT_PULLUP);
-  pinMode(15,INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);
+  pinMode(2, INPUT_PULLUP);
+  pinMode(15, INPUT_PULLUP);
 
   Serial.println("LOG: Pinmodes set, cleaning config strings...");
-  strcpy(config.device_name,"\0");
-  strcpy(config.telnr_1,"\0");
-  strcpy(config.telnr_2,"\0");
-  strcpy(config.telnr_3,"\0");
-  strcpy(config.sip_ip,"\0");
-  strcpy(config.sip_user,"\0");
-  strcpy(config.sip_pass,"\0");
+  // Жестко обнуляем массивы памяти, чтобы ConfigManager не читал мусор из NVS
+  memset(&config, 0, sizeof(Config));
+
+  strcpy(config.device_name, "Doorbell");
+  strcpy(config.telnr_1, "100");
+  strcpy(config.telnr_2, "101");
+  strcpy(config.telnr_3, "102");
+  strcpy(config.sip_ip, "192.168.1.10"); // Дефолтный IP вашего Yate-сервера
+  strcpy(config.sip_user, "doorphone");
+  strcpy(config.sip_pass, "password");
 
   meta.version = 1;
   config.tz_dst = 120;
@@ -169,16 +172,18 @@ void setup() {
   configManager.setAPCallback(APCallback);
   configManager.setAPICallback(APICallback);
   
-  Serial.println("LOG: Running configManager.begin()... (File system check)");
+  Serial.println("LOG: Running configManager.begin()...");
   configManager.begin(config);
 
   Serial.println("LOG: Setup finished successfully!");
 }
 
 void loop() {
-  // 1. Запускаем фоновые задачи веб-менеджера сетей
-  configManager.loop();
-
-  // 2. Запускаем фоновые задачи голосового SIP-модуля
-  doorphone.loop();
+  // Вызываем loop только тогда, когда Wi-Fi стек стабилен
+  if (WiFi.status() == WL_CONNECTED || WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA) {
+    configManager.loop();
+  }
+  
+  // Добавляем микро-паузу, чтобы фоновые потоки RTOS успевали инициализировать указатели
+  delay(10);
 }
