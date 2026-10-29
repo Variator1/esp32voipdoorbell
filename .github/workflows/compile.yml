@@ -1,0 +1,38 @@
+name: Compile ESP32 Firmware
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install PlatformIO
+      run: pip install --upgrade platformio
+
+    - name: Run PlatformIO Build (App & Filesystem)
+      run: |
+        pio run
+        pio run --target buildfs
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: esp32-voip-doorbell-bins
+        path: |
+          .pio/build/**/firmware.bin
+          .pio/build/**/spiffs.bin
