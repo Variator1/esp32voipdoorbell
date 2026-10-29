@@ -179,7 +179,67 @@ void setup() {
 }
 
 void loop() {
+  // Веб-сервер и менеджер настроек ДОЛЖНЫ крутиться всегда на первой строчке!
   configManager.loop();
-  doorphone.loop();
-}
+  
+  // Голосовой модуль крутится только если он был успешно запущен
+  if (doorphonerunning) {
+    doorphone.loop();
+  }
 
+  // Если Wi-Fi подключился к роутеру (как сейчас у вас — 192.168.50.4)
+  if (WiFi.status() == WL_CONNECTED) {
+    
+    // Проверяем, введен ли корректный IP Yate-сервера (длина строки должна быть от 7 символов, например 192.168.1.10)
+    if (strlen(config.sip_ip) >= 7) {
+      if (!doorphonerunning) {
+        Serial.print("LOG: Connected to Local Wi-Fi! Starting SIP module...");
+        if (int result = doorphone.begin(config.sip_ip, config.sip_user, config.sip_pass) == VOIPPHONE_OK) {
+          Serial.println("[OK]");
+          doorphonerunning = true;
+        } else {
+          Serial.print("[ERROR CODE:");
+          Serial.print(result);
+          Serial.println("]");
+          delay(5000); // Пауза перед повтором
+        }
+      }
+
+      // Опрос физических кнопок звонка (работает только когда SIP запущен)
+      button1.Update();
+      button2.Update();
+      button3.Update();
+
+      if (button1.clicks == 1) {
+        Serial.println("Button1 pressed. Dialing via Yate...");
+        doorphone.dial(config.telnr_1, config.device_name);
+        isbusy = true;
+      } else if (button2.clicks == 1) {
+        Serial.println("Button2 pressed. Dialing via Yate...");
+        doorphone.dial(config.telnr_2, config.device_name);
+        isbusy = true;
+      } else if (button3.clicks == 1) {
+        Serial.println("Button3 pressed. Dialing via Yate...");
+        doorphone.dial(config.telnr_3, config.device_name);
+        isbusy = true;
+      }
+    } else {
+      // Если Wi-Fi есть, но настройки SIP еще не введены, выводим напоминание раз в 10 секунд
+      static uint32_t lastRemind = 0;
+      if (millis() - lastRemind > 10000) {
+        lastRemind = millis();
+        Serial.println("LOG: Wi-Fi OK. Please open http://192.168.50.4 and configure SIP server IP!");
+      }
+    }
+  } else {
+    if (doorphonerunning) {
+      doorphonerunning = false;
+      Serial.println("LOG: Wi-Fi status changed (disconnected).");
+    }
+  }
+
+  if (isbusy && !doorphone.isBusy()) {
+    isbusy = false;
+    Serial.println("LOG: Call finished / Hangup.");
+  }
+}
