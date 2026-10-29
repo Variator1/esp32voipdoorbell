@@ -8,14 +8,8 @@
 #include "ConfigManager.h"
 #include "voipphone.h"
 #include "ClickButton.h"
-#include <Adafruit_NeoPixel.h>
-#include <Dusk2Dawn.h>
 #include <TimeLib.h>
 #include "pages.h"
-
-#define WS2812PIN 32
-#define NUMPIXELS 3
-// Adafruit_NeoPixel pixels(NUMPIXELS, WS2812PIN, NEO_GRB + NEO_KHZ400);
 
 #define mDNSUpdate(c)  do {} while(0)
 using WebServerClass = WebServer;
@@ -29,7 +23,6 @@ ClickButton button1(4, LOW, CLICKBTN_PULLUP);
 ClickButton button2(2, LOW, CLICKBTN_PULLUP);
 ClickButton button3(15, LOW, CLICKBTN_PULLUP);
 
-bool islighton=false;
 bool isbusy=false;
 
 const char *settingsHTML = (char *)"/settings.html";
@@ -61,7 +54,6 @@ struct Config {
   uint echothreshold;
 } config;
 
-
 struct Metadata {
   int8_t version;
 } meta;
@@ -75,7 +67,7 @@ void APCallback(WebServer *server) {
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
         server->send_P(200,mimeCSS,CSS_styles);
     });
-    DebugPrintln(F("AP Mode Enabled. You can call other functions that should run after a mode is enabled ... "));
+    Serial.println("LOG: AP Mode Callback triggered.");
 }
 
 void APICallback(WebServer *server) {
@@ -96,20 +88,7 @@ void APICallback(WebServer *server) {
   });
   
   server->on("/datetime", HTTPMethod::HTTP_GET, [server](){
-    server->send(200, "text/plain", ntp.formattedTime("%d.%m.%Y %X"));
-  });
-  
-  server->on("/debug", HTTPMethod::HTTP_GET, [server](){
-    String output = String(ntp.formattedTime("%d.%m.%Y %X"))+"</br>";
-    Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
-    int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-    int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-    int min = ntp.hours()*60+ntp.minutes();
-    output += "Now:"+String(min)+"</br>";
-    output += "Sunrise:"+String(sr_min)+"</br>";
-    output += "Sunset:"+String(ss_min)+"</br>";
-    output += "LEDs Disabled in this build</br>";
-    server->send(200, mimeHTML, output);
+    server->send(200, "text/plain", "Local Mode (No Internet)");
   });
 
   server->on("/restart", HTTPMethod::HTTP_GET, [server](){
@@ -138,7 +117,7 @@ void APICallback(WebServer *server) {
 void setup() {
   Serial.begin(115200);
   Serial.println();
-  Serial.println("Startup...");
+  Serial.println("Startup Autonomous Mode...");
 
   pinMode(4,INPUT_PULLUP);
   pinMode(2,INPUT_PULLUP);
@@ -190,26 +169,19 @@ void setup() {
   configManager.setAPCallback(APCallback);
   configManager.setAPICallback(APICallback);
   
-  Serial.println("LOG: Running configManager.begin()...");
+  Serial.println("LOG: Running configManager.begin()... (File system check)");
   configManager.begin(config);
 
-  Serial.println("LOG: Initializing NTP...");
-  ntp.ruleDST("CEST", Last, Sun, Mar, 2, config.tz_dst);
-  ntp.ruleSTD("CET", Last, Sun, Oct, 3, config.tz_std);
-  ntp.begin();
-  
   Serial.println("LOG: Setup finished successfully!");
 }
 
-
 void loop() {
   if (WiFi.status() == WL_CONNECTED ) {
-    ntp.update();
     if(strlen(config.sip_ip)<7) {
-      //Serial.println("Configuration fault.");
+      // Ошибка конфигурации
     } else {
       if( !doorphonerunning ) {
-        Serial.print("Online. Starting sip modul...");
+        Serial.print("Connected to Local Wi-Fi. Starting SIP module...");
         if(int result = doorphone.begin(config.sip_ip,config.sip_user,config.sip_pass)==VOIPPHONE_OK) {
           doorphone.setAmpGain(config.amp_gain);
           doorphone.setMicGain(config.mic_gain);
@@ -219,29 +191,21 @@ void loop() {
           Serial.print("[ERROR CODE:"+(String)result+"]");
         }
         doorphonerunning = true;
-        // pixels.clear();
-        // pixels.show();
       }
       button1.Update();
       button2.Update();
       button3.Update();
       if(button1.clicks==1) {
-        Serial.println("Button1 pressed. Dialing...");
+        Serial.println("Button1 pressed. Dialing via Yate...");
         doorphone.dial(config.telnr_1,config.device_name);
-        // pixels.setPixelColor(2, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        // pixels.show();
         isbusy = true;
       } else if(button2.clicks==1) {
-        Serial.println("Button2 pressed. Dialing...");
+        Serial.println("Button2 pressed. Dialing via Yate...");
         doorphone.dial(config.telnr_2,config.device_name);
-        // pixels.setPixelColor(1, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        // pixels.show();
         isbusy = true;
       } else if(button3.clicks==1) {
-        Serial.println("Button3 pressed. Dialing...");
+        Serial.println("Button3 pressed. Dialing via Yate...");
         doorphone.dial(config.telnr_3,config.device_name);
-        // pixels.setPixelColor(0, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        // pixels.show();
         isbusy = true;
       }
     }
@@ -252,31 +216,5 @@ void loop() {
 
   if(isbusy && !doorphone.isBusy()) {
     isbusy = false;
-    // pixels.clear();
-    // pixels.show();
-    islighton = false;
-  }
-
-  Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
-  int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-  int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-  int min = ntp.hours()*60+ntp.minutes();
-  if(min > ss_min || min < sr_min) {
-    if (!islighton) {
-      islighton = true;
-      // pixels.setPixelColor(0, pixels.Color(config.light_r, config.light_g, config.light_b));
-      // pixels.setPixelColor(1, pixels.Color(config.light_r, config.light_g, config.light_b));
-      // pixels.setPixelColor(2, pixels.Color(config.light_r, config.light_g, config.light_b));
-      // pixels.show();
-    }
-  } else {
-    if (islighton) {
-      islighton = false;
-      // pixels.clear();
-      // pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-      // pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-      // pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-      // pixels.show();
-    }
   }
 }
