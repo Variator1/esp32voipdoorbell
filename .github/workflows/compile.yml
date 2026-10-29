@@ -29,11 +29,16 @@ jobs:
         pio run
         pio run --target buildfs
 
-    - name: Copy Bootloader for Upload
-      run: cp ~/.platformio/packages/framework-arduinoespressif32/tools/sdk/bin/bootloader_dio_40m.bin .pio/build/esp32dev/bootloader.bin
+    - name: Prepare Clean Output Directory
+      run: |
+        mkdir -p output_bins
+        cp .pio/build/esp32dev/firmware.bin output_bins/
+        cp .pio/build/esp32dev/partitions.bin output_bins/
+        cp .pio/build/esp32dev/spiffs.bin output_bins/
+        cp ~/.platformio/packages/framework-arduinoespressif32/tools/sdk/bin/bootloader_dio_40m.bin output_bins/bootloader.bin
 
-    - name: Upload Artifacts
+    - name: Upload Clean Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: esp32-voip-doorbell-bins
-        path: .pio/build/esp32dev/
+        path: output_bins/
