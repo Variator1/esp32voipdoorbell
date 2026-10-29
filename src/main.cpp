@@ -61,6 +61,7 @@ struct Config {
   uint echothreshold;
 } config;
 
+
 struct Metadata {
   int8_t version;
 } meta;
@@ -138,16 +139,12 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println("Startup...");
-  // pixels.begin();
-  // pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-  // pixels.setPixelColor(1, pixels.Color(0, 255, 0));
-  // pixels.setPixelColor(2, pixels.Color(0, 0, 255));
-  // pixels.show();
 
   pinMode(4,INPUT_PULLUP);
   pinMode(2,INPUT_PULLUP);
   pinMode(15,INPUT_PULLUP);
 
+  Serial.println("LOG: Pinmodes set, cleaning config strings...");
   strcpy(config.device_name,"\0");
   strcpy(config.telnr_1,"\0");
   strcpy(config.telnr_2,"\0");
@@ -159,8 +156,12 @@ void setup() {
   meta.version = 1;
   config.tz_dst = 120;
   config.tz_std = 60;
+  
+  Serial.println("LOG: Initializing ConfigManager names...");
   configManager.setAPName("voipdoorbell");
   configManager.setAPFilename("/index.html");
+  
+  Serial.println("LOG: Adding parameters to ConfigManager...");
   configManager.addParameter("device_name", config.device_name, 32);
   configManager.addParameter("telnr_1", config.telnr_1, 32);
   configManager.addParameter("telnr_2", config.telnr_2, 32);
@@ -184,14 +185,22 @@ void setup() {
   configManager.addParameter("echodamping", &config.echodamping);
   configManager.addParameter("echothreshold", &config.echothreshold);
   configManager.addParameter("version", &meta.version, get);
+  
+  Serial.println("LOG: Setting ConfigManager callbacks...");
   configManager.setAPCallback(APCallback);
   configManager.setAPICallback(APICallback);
+  
+  Serial.println("LOG: Running configManager.begin()...");
   configManager.begin(config);
 
+  Serial.println("LOG: Initializing NTP...");
   ntp.ruleDST("CEST", Last, Sun, Mar, 2, config.tz_dst);
   ntp.ruleSTD("CET", Last, Sun, Oct, 3, config.tz_std);
   ntp.begin();
+  
+  Serial.println("LOG: Setup finished successfully!");
 }
+
 
 void loop() {
   if (WiFi.status() == WL_CONNECTED ) {
