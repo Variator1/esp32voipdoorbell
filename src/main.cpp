@@ -73,10 +73,13 @@ void APCallback(WebServer *server) {
 
 void APICallback(WebServer *server) {
   server->on("/disconnect", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: Получен веб-запрос /disconnect");
     configManager.clearWifiSettings(false);
   });
 
-  server->on("/settings.html", HTTPMethod::HTTP_GET, [server](){
+  // ИЗМЕНИЛИ АДРЕС НА /set, ЧТОБЫ ОБЪЕХАТЬ ВНУТРЕННИЙ БАГ БИБЛИОТЕКИ С JSON
+  server->on("/set", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: Открываем кастомное окно настроек по адресу /set...");
     server->send_P(200, mimeHTML, HTML_settings);
   });
 
@@ -92,52 +95,59 @@ void APICallback(WebServer *server) {
     server->send(200, "text/plain", "Local Mode");
   });
 
-  // ФИНАЛЬНЫЙ ИСПРАВЛЕННЫЙ ОБРАБОТЧИК СОХРАНЕНИЯ
-  server->on("/config", HTTPMethod::HTTP_POST, [server](){
-    Serial.println("LOG: Получен запрос на сохранение настроек...");
+  // ИСПРАВЛЕННЫЙ ОБРАБОТЧИК: ПРИНИМАЕТ МЕТОД "PUT" И ДЕКОДИРУЕТ JSON ОТ СТРАНИЦЫ
+  server->on("/settings", HTTPMethod::HTTP_PUT, [server](){
+    Serial.println("LOG: [WEB-PUT] Получены новые настройки в формате JSON!");
+    
+    String jsonBody = server->plain();
+    Serial.print("LOG: Тело JSON: ");
+    Serial.println(jsonBody);
+    
+    DynamicJsonDocument doc(1536);
+    DeserializationError error = deserializeJson(doc, jsonBody);
 
-    // Ручной перехват текстовых полей (проверяем все возможные варианты имен из HTML)
-    if (server->hasArg("device_name")) strncpy(config.device_name, server->arg("device_name").c_str(), 32);
-    
-    if (server->hasArg("telnr_1")) strncpy(config.telnr_1, server->arg("telnr_1").c_str(), 32);
-    if (server->hasArg("telnr_2")) strncpy(config.telnr_2, server->arg("telnr_2").c_str(), 32);
-    if (server->hasArg("telnr_3")) strncpy(config.telnr_3, server->arg("telnr_3").c_str(), 32);
-    
-    if (server->hasArg("sip_ip"))  strncpy(config.sip_ip, server->arg("sip_ip").c_str(), 32);
-    if (server->hasArg("sip_gateway")) strncpy(config.sip_ip, server->arg("sip_gateway").c_str(), 32); // альтернативное имя
-    
-    if (server->hasArg("sip_user")) strncpy(config.sip_user, server->arg("sip_user").c_str(), 32);
-    if (server->hasArg("sip_user_name")) strncpy(config.sip_user, server->arg("sip_user_name").c_str(), 32);
-    
-    if (server->hasArg("sip_pass")) strncpy(config.sip_pass, server->arg("sip_pass").c_str(), 32);
-    if (server->hasArg("sip_password")) strncpy(config.sip_pass, server->arg("sip_password").c_str(), 32);
-
-    // Ручной перехват настроек звука
-    if (server->hasArg("amp_gain")) config.amp_gain = server->arg("amp_gain").toInt();
-    if (server->hasArg("mic_gain")) config.mic_gain = server->arg("mic_gain").toInt();
-    
-    if (server->hasArg("echocompensation")) {
-      config.echocompensation = (server->arg("echocompensation") == "true" || server->arg("echocompensation") == "1");
-    } else {
-      config.echocompensation = false;
+    if (error) {
+      Serial.print("LOG: [JSON ERROR] Ошибка разбора пакета: ");
+      Serial.println(error.c_str());
+      server->send(400, "text/plain", "Invalid JSON");
+      return;
     }
 
-    // Принудительно сохраняем обновленную структуру в энергонезависимую память через ConfigManager
-    configManager.save(); 
+    // Раскладываем данные из JSON по переменным структуры config
+    if (doc.containsKey("device_name")) strncpy(config.device_name, doc["device_name"], 32);
+    if (doc.containsKey("telnr_1")) strncpy(config.telnr_1, doc["telnr_1"], 32);
+    if (doc.containsKey("telnr_2")) strncpy(config.telnr_2, doc["telnr_2"], 32);
+    if (doc.containsKey("telnr_3")) strncpy(config.telnr_3, doc["telnr_3"], 32);
+    if (doc.containsKey("sip_ip"))   strncpy(config.sip_ip, doc["sip_ip"], 32);
+    if (doc.containsKey("sip_user")) strncpy(config.sip_user, doc["sip_user"], 32);
+    if (doc.containsKey("sip_pass")) strncpy(config.sip_pass, doc["sip_pass"], 32);
 
-    // Отправляем красивый HTML-ответ в браузер
-    String response = "<html><head><meta charset='utf-8'><style>body{font-family:sans-serif;text-align:center;padding-top:50px;}</style></head>";
-    response += "<body><h2>Настройки SIP успешно сохранены!</h2>";
-    response += "<p>Плата перезагружается. Через 10 секунд она зарегистрируется на Yate-сервере: <b>" + String(config.sip_ip) + "</b></p></body></html>";
-    server->send(200, "text/html", response);
+    if (doc.containsKey("amp_gain")) config.amp_gain = doc["amp_gain"].as<int>();
+    if (doc.containsKey("mic_gain")) config.mic_gain = doc["mic_gain"].as<int>();
+    if (doc.containsKey("tz_dst"))   config.tz_dst = doc["tz_dst"].as<int>();
+    if (doc.containsKey("tz_std"))   config.tz_std = doc["tz_std"].as<int>();
+    if (doc.containsKey("echodamping"))   config.echodamping = doc["echodamping"].as<int>();
+    if (doc.containsKey("echothreshold")) config.echothreshold = doc["echothreshold"].as<int>();
+
+    if (doc.containsKey("echocompensation")) {
+      config.echocompensation = doc["echocompensation"].as<bool>();
+    }
+
+    // Принудительно сохраняем данные во Flash-память
+    configManager.save(); 
+    Serial.println("LOG: Настройки сохранены в NVS.");
+
+    // Отвечаем jQuery кодом 200 OK, чтобы на веб-странице загорелось "Settings Updated"
+    server->send(200, "text/plain", "OK");
     
-    Serial.println("LOG: Настройки сохранены. Перезапуск системы...");
+    Serial.println("LOG: Перезапуск платы через 2 секунды...");
     delay(2000);
     ESP.restart();
   });
 
   httpUpdate.setup(server);
 }
+
 
 void setup() {
   Serial.begin(115200);
