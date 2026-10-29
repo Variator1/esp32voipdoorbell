@@ -179,21 +179,18 @@ void setup() {
 }
 
 void loop() {
-  // Веб-сервер и менеджер настроек ДОЛЖНЫ крутиться всегда на первой строчке!
+  // Менеджер веб-страниц должен крутиться ВСЕГДА на первой строчке
   configManager.loop();
-  
-  // Голосовой модуль крутится только если он был успешно запущен
-  if (doorphonerunning) {
-    doorphone.loop();
-  }
 
-  // Если Wi-Fi подключился к роутеру (как сейчас у вас — 192.168.50.4)
+  // Если Wi-Fi подключен к роутеру (IP: 192.168.50.4)
   if (WiFi.status() == WL_CONNECTED) {
     
-    // Проверяем, введен ли корректный IP Yate-сервера (длина строки должна быть от 7 символов, например 192.168.1.10)
-    if (strlen(config.sip_ip) >= 7) {
+    // ЗАЩИТА: Запускаем SIP только если IP-адрес сервера Yate БЫЛ ИЗМЕНЕН в настройках 
+    // (не равен дефолтному "192.168.1.10" и строка заполнена)
+    if (strlen(config.sip_ip) >= 7 && strcmp(config.sip_ip, "192.168.1.10") != 0) {
+      
       if (!doorphonerunning) {
-        Serial.print("LOG: Connected to Local Wi-Fi! Starting SIP module...");
+        Serial.print("LOG: Valid Yate Server IP found! Starting SIP module...");
         if (int result = doorphone.begin(config.sip_ip, config.sip_user, config.sip_pass) == VOIPPHONE_OK) {
           Serial.println("[OK]");
           doorphonerunning = true;
@@ -201,11 +198,16 @@ void loop() {
           Serial.print("[ERROR CODE:");
           Serial.print(result);
           Serial.println("]");
-          delay(5000); // Пауза перед повтором
+          delay(5000);
         }
       }
 
-      // Опрос физических кнопок звонка (работает только когда SIP запущен)
+      // Голосовой движок обрабатываем только если SIP успешно запущен
+      if (doorphonerunning) {
+        doorphone.loop();
+      }
+
+      // Опрос кнопок
       button1.Update();
       button2.Update();
       button3.Update();
@@ -223,13 +225,6 @@ void loop() {
         doorphone.dial(config.telnr_3, config.device_name);
         isbusy = true;
       }
-    } else {
-      // Если Wi-Fi есть, но настройки SIP еще не введены, выводим напоминание раз в 10 секунд
-      static uint32_t lastRemind = 0;
-      if (millis() - lastRemind > 10000) {
-        lastRemind = millis();
-        Serial.println("LOG: Wi-Fi OK. Please open http://192.168.50.4 and configure SIP server IP!");
-      }
     }
   } else {
     if (doorphonerunning) {
@@ -237,6 +232,12 @@ void loop() {
       Serial.println("LOG: Wi-Fi status changed (disconnected).");
     }
   }
+
+  if (isbusy && !doorphone.isBusy()) {
+    isbusy = false;
+    Serial.println("LOG: Call finished / Hangup.");
+  }
+}
 
   if (isbusy && !doorphone.isBusy()) {
     isbusy = false;
