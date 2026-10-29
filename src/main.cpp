@@ -176,7 +176,12 @@ void setup() {
 }
 
 void loop() {
-  if (WiFi.status() == WL_CONNECTED ) {
+  // 1. Сначала даем сетевому менеджеру и телефону обработать свои фоновые задачи
+  configManager.loop();
+  doorphone.loop();
+
+  // 2. Только после этого безопасно проверяем подключение к Wi-Fi
+  if (WiFi.status() == WL_CONNECTED) {
     if(strlen(config.sip_ip)<7) {
       // Ошибка конфигурации
     } else {
@@ -209,12 +214,18 @@ void loop() {
         isbusy = true;
       }
     }
+  } else {
+    // Если Wi-Fi отключен или мы в режиме AP — сбрасываем флаг, чтобы перерегистрироваться позже
+    if (doorphonerunning) {
+      doorphonerunning = false;
+      Serial.println("LOG: Wi-Fi status changed (disconnected / AP mode).");
+    }
   }
-  
-  configManager.loop();
-  doorphone.loop();
 
+  // 3. Сброс статуса вызова, если разговор на сервере Yate завершен
   if(isbusy && !doorphone.isBusy()) {
     isbusy = false;
+    Serial.println("LOG: Call finished / Hangup.");
   }
 }
+
