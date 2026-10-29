@@ -99,7 +99,8 @@ void APICallback(WebServer *server) {
   server->on("/settings", HTTPMethod::HTTP_PUT, [server](){
     Serial.println("LOG: [WEB-PUT] Получены новые настройки в формате JSON!");
     
-    String jsonBody = server->plain();
+    String jsonBody = server->arg("plain");
+
     Serial.print("LOG: Тело JSON: ");
     Serial.println(jsonBody);
     
