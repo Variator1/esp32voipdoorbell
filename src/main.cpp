@@ -66,49 +66,49 @@ NTP ntp(wifiUdp);
 
 // 1. В режиме AP оставляем ConfigManager управлять своей стартовой страницей
 void APCallback(WebServer *server) {
-    // Не перехватываем "/", чтобы ConfigManager отдал стандартный файл точки доступа
+    // Отдаем главную страницу настройки Wi-Fi из pages.h
+    server->on("/", HTTPMethod::HTTP_GET, [server](){
+        Serial.println("LOG: [WEB] Запрос главной страницы настройки Wi-Fi");
+        server->send_P(200, "text/html", HTML_index);
+    });
+
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
         server->send_P(200, mimeCSS, CSS_styles);
     });
+    
     Serial.println("LOG: [APCallback] AP Mode Callback triggered.");
 }
 
-// 2. В обычном режиме регистрируем расширенные настройки из pages.h
 void APICallback(WebServer *server) {
     Serial.println("LOG: [APICallback] Регистрация маршрутов API...");
 
     server->on("/disconnect", HTTPMethod::HTTP_GET, [server](){
-        Serial.println("LOG: [WEB] Очистка Wi-Fi настроек.");
+        Serial.println("LOG: [WEB] Получен веб-запрос /disconnect — очистка Wi-Fi настроек.");
         configManager.clearWifiSettings(false);
     });
 
-    // Страница расширенных настроек
     server->on("/settings.html", HTTPMethod::HTTP_GET, [server](){
         Serial.println("LOG: [WEB] Запрос страницы /settings.html");
         server->send_P(200, mimeHTML, HTML_settings);
     });
 
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
+        Serial.println("LOG: [WEB] Запрос стилей /styles.css");
         server->send_P(200, mimeCSS, CSS_styles);
     });
 
     server->on("/main.js", HTTPMethod::HTTP_GET, [server](){
+        Serial.println("LOG: [WEB] Запрос скрипта /main.js");
         server->send_P(200, mimeJS, JS_main);
     });
     
     server->on("/datetime", HTTPMethod::HTTP_GET, [server](){
+        Serial.println("LOG: [WEB] Запрос /datetime");
         server->send(200, "text/plain", "Local Mode");
     });
 
     httpUpdate.setup(server);
     Serial.println("LOG: [APICallback] Все маршруты успешно зарегистрированы.");
-}
-
-  // УДАЛЕНЫ ручные вызовы server->on("/settings", ...) — 
-  // ConfigManager сам зарегистрирует их автоматически в startApi()!
-
-  httpUpdate.setup(server);
-  Serial.println("LOG: [APICallback] Все маршруты успешно зарегистрированы.");
 }
 
 void setup() {
