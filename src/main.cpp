@@ -68,50 +68,74 @@ void APCallback(WebServer *server) {
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
         server->send_P(200, mimeCSS, CSS_styles);
     });
-    Serial.println("LOG: AP Mode Callback triggered.");
+    Serial.println("LOG: [APCallback] AP Mode Callback triggered.");
 }
 
 void APICallback(WebServer *server) {
+  Serial.println("LOG: [APICallback] Регистрация маршрутов API...");
+
   server->on("/disconnect", HTTPMethod::HTTP_GET, [server](){
-    Serial.println("LOG: Получен веб-запрос /disconnect");
+    Serial.println("LOG: [WEB] Получен веб-запрос /disconnect — очистка Wi-Fi настроек.");
     configManager.clearWifiSettings(false);
   });
 
-  // Стандартные роуты для отдачи веб-интерфейса ConfigManager
   server->on("/settings.html", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: [WEB] Запрос страницы /settings.html");
     server->send_P(200, mimeHTML, HTML_settings);
   });
 
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: [WEB] Запрос стилей /styles.css");
     server->send_P(200, mimeCSS, CSS_styles);
   });
 
   server->on("/main.js", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: [WEB] Запрос скрипта /main.js");
     server->send_P(200, mimeJS, JS_main);
   });
   
   server->on("/datetime", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: [WEB] Запрос /datetime");
     server->send(200, "text/plain", "Local Mode");
   });
 
+  // Принудительные эндпоинты для работы REST API настроек с подробным логированием
+  server->on("/settings", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: [REST-GET] Получен запрос GET /settings (отправка конфигурации в браузер).");
+    configManager.handleRESTGet();
+  });
+
+  server->on("/settings", HTTPMethod::HTTP_PUT, [server](){
+    Serial.println("LOG: [REST-PUT] Получен запрос PUT /settings (сохранение настроек из браузера)...");
+    if (server->hasArg("plain")) {
+      Serial.print("LOG: [REST-PUT] Полученные данные JSON: ");
+      Serial.println(server->arg("plain"));
+    }
+    configManager.handleRESTPut();
+    Serial.println("LOG: [REST-PUT] Обработка PUT /settings завершена, изменения записаны в EEPROM.");
+  });
+
   httpUpdate.setup(server);
+  Serial.println("LOG: [APICallback] Все маршруты успешно зарегистрированы.");
 }
 
 void setup() {
   Serial.begin(115200);
+  delay(1000);
   Serial.println();
-  Serial.println("Startup Autonomous Mode...");
+  Serial.println("=========================================");
+  Serial.println("Startup Autonomous Mode (с расширенными логами)...");
+  Serial.println("=========================================");
 
   pinMode(4, INPUT_PULLUP);
   pinMode(2, INPUT_PULLUP);
   pinMode(15, INPUT_PULLUP);
 
-  Serial.println("LOG: Initializing ConfigManager names...");
+  Serial.println("LOG: [SETUP] Инициализация имен ConfigManager...");
   configManager.setAPName("voipdoorbell");
   configManager.setAPFilename("/index.html");
 
-  // Регистрация параметров для автоматического сохранения/загрузки через ConfigManager
-  Serial.println("LOG: Adding parameters to ConfigManager...");
+  Serial.println("LOG: [SETUP] Регистрация параметров в ConfigManager...");
   configManager.addParameter("device_name", config.device_name, 32);
   configManager.addParameter("telnr_1", config.telnr_1, 32);
   configManager.addParameter("telnr_2", config.telnr_2, 32);
@@ -136,30 +160,31 @@ void setup() {
   configManager.addParameter("echothreshold", &config.echothreshold);
   configManager.addParameter("version", &meta.version, get);
   
-  Serial.println("LOG: Setting ConfigManager callbacks...");
+  Serial.println("LOG: [SETUP] Установка колбэков ConfigManager...");
   configManager.setAPCallback(APCallback);
   configManager.setAPICallback(APICallback);
   
-  Serial.println("LOG: Running configManager.begin()...");
+  Serial.println("LOG: [SETUP] Запуск configManager.begin(). Чтение конфигурации из EEPROM...");
   configManager.begin(config);
 
+  Serial.println("LOG: [SETUP] Текущие значения после чтения из памяти:");
+  Serial.printf("  - Device Name: %s\n", config.device_name);
+  Serial.printf("  - SIP IP: %s\n", config.sip_ip);
+  Serial.printf("  - SIP User: %s\n", config.sip_user);
+  Serial.printf("  - Tel 1: %s\n", config.telnr_1);
+  Serial.printf("  - Echo Comp: %s\n", config.echocompensation ? "true" : "false");
   Serial.println("LOG: Setup finished successfully!");
 }
 
 void loop() {
-  // Менеджер веб-страниц и запросов должен крутиться ВСЕГДА на первой строчке
   configManager.loop();
 
-  // Если Wi-Fi подключен к роутеру
   if (WiFi.status() == WL_CONNECTED) {
-    
-    // Запускаем SIP только если IP-адрес задан
     if (strlen(config.sip_ip) >= 7) {
-      
       if (!doorphonerunning) {
-        Serial.print("LOG: Target Yate Server IP found: ");
+        Serial.print("LOG: [SIP] Target Yate Server IP found: ");
         Serial.println(config.sip_ip);
-        Serial.print("LOG: Starting SIP module...");
+        Serial.print("LOG: [SIP] Starting SIP module... ");
         
         if (int result = doorphone.begin(config.sip_ip, config.sip_user, config.sip_pass) == VOIPPHONE_OK) {
           doorphone.setAmpGain(config.amp_gain);
@@ -179,21 +204,20 @@ void loop() {
         doorphone.loop();
       }
 
-      // Опрос кнопок звонка
       button1.Update();
       button2.Update();
       button3.Update();
 
       if (button1.clicks == 1) {
-        Serial.println("Button1 pressed. Dialing via Yate...");
+        Serial.println("LOG: [BUTTON] Button1 pressed. Dialing via Yate...");
         doorphone.dial(config.telnr_1, config.device_name);
         isbusy = true;
       } else if (button2.clicks == 1) {
-        Serial.println("Button2 pressed. Dialing via Yate...");
+        Serial.println("LOG: [BUTTON] Button2 pressed. Dialing via Yate...");
         doorphone.dial(config.telnr_2, config.device_name);
         isbusy = true;
       } else if (button3.clicks == 1) {
-        Serial.println("Button3 pressed. Dialing via Yate...");
+        Serial.println("LOG: [BUTTON] Button3 pressed. Dialing via Yate...");
         doorphone.dial(config.telnr_3, config.device_name);
         isbusy = true;
       }
@@ -201,12 +225,12 @@ void loop() {
   } else {
     if (doorphonerunning) {
       doorphonerunning = false;
-      Serial.println("LOG: Wi-Fi status changed (disconnected).");
+      Serial.println("LOG: [WIFI] Wi-Fi status changed (disconnected).");
     }
   }
 
   if (isbusy && !doorphone.isBusy()) {
     isbusy = false;
-    Serial.println("LOG: Call finished / Hangup.");
+    Serial.println("LOG: [SIP] Call finished / Hangup.");
   }
 }
