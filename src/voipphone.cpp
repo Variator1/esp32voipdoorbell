@@ -189,7 +189,7 @@ esp_err_t VOIPPhone::writeToAmp(const void *src,size_t size, size_t *bytes_writt
 void VOIPPhone::tx_rtp(){
   uint8_t temp[160];
   size_t bytes_read = 0;
-  int32_t i2s_buffer[160]; // Буфер под 32-битные сэмплы от INMP441
+  int32_t i2s_buffer[160]; 
   
   static uint16_t sequenceNumber = 0;
   const uint32_t ssrc = 3124150;
@@ -197,28 +197,40 @@ void VOIPPhone::tx_rtp(){
   RTPPacket txRTPpkg;
   uint8_t packetBuffer[255];
 
-  // Читаем 160 сэмплов (каждый по 4 байта = 640 байт)
+  // Замеряем время чтения с микрофона (полезно для поиска лагов I2S)
+  uint32_t t_start = micros();
   esp_err_t result = readFromMic(i2s_buffer, sizeof(i2s_buffer), &bytes_read);
-  
+  uint32_t t_elapsed = micros() - t_start;
+
+  // Логируем, если чтение заняло слишком много времени (> 15 мс) или вернуло ошибку
+  if (t_elapsed > 15000) {
+    Serial.printf("DEBUG_MIC| Warning: Slow I2S read: %u us, bytes: %u\n", t_elapsed, bytes_read);
+  }
+
   if (result == ESP_OK && bytes_read > 0) {
     int samples_read = bytes_read / sizeof(int32_t);
+    
+    // Проверка на "абсолютную тишину" от микрофона (если все сэмплы нулевые)
+    bool is_silent = true;
     
     for(int i = 0; i < 160; i++) {
       int16_t sample = 0;
       if (i < samples_read) {
-        // INMP441 выдает 24-битный звук в 32-битном контейнере.
-        // Сдвигаем вправо (>> 14 или >> 16), чтобы получить нормальный 16-битный PCM.
-        // Если звук будет слишком громким/хрипящим, увеличьте сдвиг (например, до 16).
         int32_t raw_sample = i2s_buffer[i];
-        sample = (int16_t)(raw_sample >> 14); 
+        if (raw_sample != 0) is_silent = false;
+        sample = (int16_t)(raw_sample >> 16); 
       }
-      
-      // Кодируем полученный сэмпл в A-law
       temp[i] = ALaw_Encode(sample);
     }
+
+    // Если микрофон внезапно отдает сплошные нули (кратковременный срыв синхронизации I2S)
+    if (is_silent) {
+      // Можно раскомментировать для отладки: Serial.println("DEBUG_MIC| Mic buffer is completely silent");
+    }
+
   } else {
-    // Если микрофон не отдал данные, заполняем тишиной
-    memset(temp, 0xD5, 160); // 0xD5 — это тишина в A-law
+    Serial.printf("DEBUG_MIC| Error reading mic! err=0x%x, bytes=%u\n", result, bytes_read);
+    memset(temp, 0xD5, 160); 
   }
 
   if(sequenceNumber == 0) {
@@ -234,6 +246,8 @@ void VOIPPhone::tx_rtp(){
   if (beginOK != 0) {
     rtpudp.write(packetBuffer, length);
     rtpudp.endPacket();
+  } else {
+    Serial.println("DEBUG_NET| Error: rtpudp.beginPacket failed!");
   }
 }
 
