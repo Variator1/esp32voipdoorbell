@@ -3,19 +3,18 @@
 
 const char HTML_settings[] PROGMEM = R"=====(
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
   <head>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="styles.css">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.16.0/jquery.validate.min.js"></script>
     <script src="main.js"></script>
     <title>ConfigManager</title>
   </head>
   <body>
     <div class="container">
       <h1 style="text-align: center;">Settings</h1>
-      <form method="post" action="/settings">
+      <form id="settings-form">
         <div class="field-group">
           <label>Device Name</label>
           <input name="device_name" type="text" size="32" data-type="text">
@@ -105,7 +104,7 @@ const char HTML_settings[] PROGMEM = R"=====(
           <input name="echothreshold" type="text" size="4" data-type="integer">
         </div>
         <div class="button-container">
-          <h2 style="" id="status"></h2>
+          <h2 id="status" style="color: green;"></h2>
           <button type="submit">Save</button>
         </div>
       </form>
@@ -116,7 +115,7 @@ const char HTML_settings[] PROGMEM = R"=====(
 
 const char HTML_index[] PROGMEM = R"=====(
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
     <head>
         <link rel="stylesheet" href="styles.css">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -144,80 +143,72 @@ const char HTML_index[] PROGMEM = R"=====(
 )=====";
 
 const char JS_main[] PROGMEM = R"=====(
-$( document ).ready(function() {
-
-  $.ajax({
-         url: '/settings',
-         success: function(data) {
-           $.each(data, function(key, value, data) {
-             var input = document.getElementsByName(key);
-             if (input.length > 0) {
-               var dataType = input[0].getAttribute("data-type");
-               if (dataType == "boolean") {
-                 $(input[0]).prop("checked", value);
-                 return
-               }
-
-               $(input[0]).val(value);
-             }
-           });
-         }
-  });
-
-  $.fn.serializeObject = function() {
-    var o = {};
-    
-    var a = this.serializeArray();
-    $.each(a, function() {
-      var input = document.getElementsByName(this.name);
-      var value = this.value;
-      var dataType = input[0].getAttribute("data-type");
-      if (dataType == "integer") value = parseInt(value);
-      if (dataType == "number") value = parseFloat(value);
-      if (dataType == "boolean") value = value == "on";
-
-      if (o[this.name]) {
-        if (!o[this.name].push) {
-          o[this.name] = [o[this.name]];
+document.addEventListener("DOMContentLoaded", function() {
+  // 1. Загружаем текущие настройки при открытии страницы
+  fetch('/settings')
+    .then(response => response.json())
+    .then(data => {
+      for (const [key, value] of Object.entries(data)) {
+        const input = document.getElementsByName(key)[0];
+        if (input) {
+          const dataType = input.getAttribute("data-type");
+          if (dataType === "boolean") {
+            input.checked = Boolean(value);
+          } else {
+            input.value = value;
+          }
         }
-        o[this.name].push(value);
-      } else {
-        o[this.name] = value;
       }
-    });
+    })
+    .catch(err => console.error("Error loading settings:", err));
 
-    var c = $('input[type=radio],input[type=checkbox]',this);
-    $.each(c, function(){
-      if(!o.hasOwnProperty(this.name)){
-        o[this.name] = false;
-      }
-    });
-
-    return o;
-  };
-
-  $('form').on('submit', function(e) {
-    document.getElementById("status").innerHTML = "";
-    
+  // 2. Обработка отправки формы методом PUT на /settings
+  const form = document.getElementById('settings-form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
       e.preventDefault();
+      document.getElementById("status").innerHTML = "";
 
-      var formData = $(this).serializeObject();
+      const formData = new FormData(form);
+      const data = {};
 
-      // Send data as a PUT request
-      $.ajax({
-             url: '/settings',
-             type: 'PUT',
-             data: JSON.stringify(formData),
-             contentType: 'application/json',
-             success: function(data) {
-               console.log(formData);
-               document.getElementById("status").innerHTML = "Settings Updated"
-             }
+      formData.forEach((value, key) => {
+        const input = document.getElementsByName(key)[0];
+        if (input) {
+          const dataType = input.getAttribute("data-type");
+          if (dataType === "integer") value = parseInt(value) || 0;
+          if (dataType === "number") value = parseFloat(value) || 0;
+        }
+        data[key] = value;
       });
 
-      return false;
-    
-  });
+      // Обработка чебоксов (если выключены, в formData они не попадают)
+      document.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        data[cb.name] = cb.checked;
+      });
+
+      // Отправка PUT-запроса
+      fetch('/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+      .then(response => {
+        if (response.ok || response.status === 204) {
+          document.getElementById("status").innerHTML = "Settings Updated";
+          console.log("Settings successfully saved:", data);
+        } else {
+          document.getElementById("status").innerHTML = "Error saving!";
+        }
+      })
+      .catch(err => {
+        console.error("Fetch error:", err);
+        document.getElementById("status").innerHTML = "Connection error!";
+      });
+    });
+  }
 });
 )=====";
 
@@ -238,17 +229,10 @@ form .error {
     border-color: #8A1F11;
 }
 label.error {
-    text-transform: none
+    text-transform: none;
 }
 p.error {
-    margin-bottom: 10px
-}
-p.inline-errors, p.error {
-    background: none
-      border-color: none
-    border: none
-    clear: both
-    font-size: 12px
+    margin-bottom: 10px;
 }
 form .field-group {
     box-sizing: border-box;
@@ -302,8 +286,6 @@ button[type=submit] {
     display: inline-block;
     font-family: inherit;
     font-size: 14px;
-    font-variant: normal;
-    font-weight: 400;
     height: 2.14285714em;
     line-height: 1.42857143;
     margin: 0;
