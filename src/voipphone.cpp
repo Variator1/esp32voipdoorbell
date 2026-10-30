@@ -141,8 +141,8 @@ int VOIPPhone::initi2smic() {
       .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, // although the SEL config should be left, it seems to transmit on right
       .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,     // Interrupt level 1
-      .dma_buf_count = 4,                           // number of buffers
-      .dma_buf_len = 8                              // 8 samples per buffer (minimum)
+      .dma_buf_count = 8,                           // Увеличиваем число буферов до 8
+      .dma_buf_len = 64                             // Увеличиваем размер буфера с 8 до 64 сэмплов
   };
   // The pin config as per the setup
   const i2s_pin_config_t pin_config = {
