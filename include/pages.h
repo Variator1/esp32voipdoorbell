@@ -146,8 +146,9 @@ const char HTML_index[] PROGMEM = R"=====(
 const char JS_main[] PROGMEM = R"=====(
 $( document ).ready(function() {
 
+  // ПРАВКА: Запрашиваем текущие настройки с нашего стабильного адреса /set
   $.ajax({
-         url: '/settings',
+         url: '/set',
          success: function(data) {
            $.each(data, function(key, value, data) {
              var input = document.getElementsByName(key);
@@ -166,7 +167,6 @@ $( document ).ready(function() {
 
   $.fn.serializeObject = function() {
     var o = {};
-    
     var a = this.serializeArray();
     $.each(a, function() {
       var input = document.getElementsByName(this.name);
@@ -198,25 +198,27 @@ $( document ).ready(function() {
 
   $('form').on('submit', function(e) {
     document.getElementById("status").innerHTML = "";
-    
-      e.preventDefault();
+    e.preventDefault();
 
-      var formData = $(this).serializeObject();
+    // Сериализуем форму в обычную текстовую строку параметров (X-WWW-FORM-URLENCODED)
+    var formData = $(this).serialize(); 
 
-      // Send data as a PUT request
-      $.ajax({
-             url: '/settings',
-             type: 'PUT',
-             data: JSON.stringify(formData),
-             contentType: 'application/json',
-             success: function(data) {
-               console.log(formData);
-               document.getElementById("status").innerHTML = "Settings Updated"
-             }
-      });
+    // Отправляем данные как обычный POST запрос на наш точный адрес /set
+    $.ajax({
+           url: '/set',
+           type: 'POST',
+           data: formData,
+           success: function(data) {
+             document.getElementById("status").innerHTML = "Settings Updated";
+             // Даем пользователю увидеть надпись и перезагружаем страницу через 2 секунды
+             setTimeout(function() { location.reload(); }, 2000);
+           },
+           error: function() {
+             document.getElementById("status").innerHTML = "Error saving settings";
+           }
+    });
 
-      return false;
-    
+    return false;
   });
 });
 )=====";
