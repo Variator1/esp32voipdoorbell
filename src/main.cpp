@@ -84,10 +84,9 @@ void APICallback(WebServer *server) {
   });
 
   // 2. Исправленный обработчик: ловит данные формы методом POST на адрес /set, как прописано в pages.h
-  server->on("/set", HTTPMethod::HTTP_POST, [server](){
+    server->on("/set", HTTPMethod::HTTP_POST, [server](){
     Serial.println("LOG: [WEB-POST] Получены новые настройки формы со страницы /set!");
 
-    // Считываем все текстовые поля напрямую по их именам из HTML-формы
     if (server->hasArg("device_name")) strncpy(config.device_name, server->arg("device_name").c_str(), 32);
     if (server->hasArg("telnr_1")) strncpy(config.telnr_1, server->arg("telnr_1").c_str(), 32);
     if (server->hasArg("telnr_2")) strncpy(config.telnr_2, server->arg("telnr_2").c_str(), 32);
@@ -96,7 +95,6 @@ void APICallback(WebServer *server) {
     if (server->hasArg("sip_user")) strncpy(config.sip_user, server->arg("sip_user").c_str(), 32);
     if (server->hasArg("sip_pass")) strncpy(config.sip_pass, server->arg("sip_pass").c_str(), 32);
 
-    // Считываем числовые поля
     if (server->hasArg("amp_gain")) config.amp_gain = server->arg("amp_gain").toInt();
     if (server->hasArg("mic_gain")) config.mic_gain = server->arg("mic_gain").toInt();
     if (server->hasArg("tz_dst"))   config.tz_dst = server->arg("tz_dst").toInt();
@@ -104,24 +102,27 @@ void APICallback(WebServer *server) {
     if (server->hasArg("echodamping"))   config.echodamping = server->arg("echodamping").toInt();
     if (server->hasArg("echothreshold")) config.echothreshold = server->arg("echothreshold").toInt();
 
-    // Считываем логический чекбокс эхоподавления
     if (server->hasArg("echocompensation")) {
       config.echocompensation = true;
     } else {
       config.echocompensation = false;
     }
 
-    // Принудительно записываем обновленную структуру config во Flash-память прибора
     configManager.save(); 
-    Serial.println("LOG: Настройки успешно сохранены в постоянную память (NVS).");
+    Serial.println("LOG: Настройки успешно записаны в NVS.");
 
-    // Отвечаем браузеру обычным текстом "OK", чтобы скрипт jQuery вывел статус "Settings Updated"
-    server->send(200, "text/plain", "OK");
+    // Отправляем полноценную страницу подтверждения сохранения
+    String response = "<html><head><meta charset='utf-8'><style>body{font-family:sans-serif;text-align:center;padding-top:50px;background:#f4f4f4;}</style></head>";
+    response += "<body><div style='background:#fff;display:inline-block;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);'>";
+    response += "<h2 style='color:#28a745;'>Настройки успешно сохранены!</h2>";
+    response += "<p>Плата перезагружается для запуска телефонии. Подождите 10 секунд...</p>";
+    response += "</div></body></html>";
+    server->send(200, "text/html", response);
     
-    Serial.println("LOG: Перезапуск платы через 2 секунды для запуска телефонии...");
     delay(2000);
     ESP.restart();
   });
+
 
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
     server->send_P(200, mimeCSS, CSS_styles);
