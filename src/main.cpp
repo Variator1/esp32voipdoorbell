@@ -65,9 +65,16 @@ WiFiUDP wifiUdp;
 NTP ntp(wifiUdp);
 
 void APCallback(WebServer *server) {
+    // Отдаем главную страницу настройки Wi-Fi из pages.h
+    server->on("/", HTTPMethod::HTTP_GET, [server](){
+        Serial.println("LOG: [WEB] Запрос главной страницы настройки Wi-Fi");
+        server->send_P(200, "text/html", HTML_index);
+    });
+
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
         server->send_P(200, mimeCSS, CSS_styles);
     });
+    
     Serial.println("LOG: [APCallback] AP Mode Callback triggered.");
 }
 
@@ -85,6 +92,7 @@ void APICallback(WebServer *server) {
   });
 
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: [WEB] Запрос стилей /styles.css");
     server->send_P(200, mimeCSS, CSS_styles);
   });
 
