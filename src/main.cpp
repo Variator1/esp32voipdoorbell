@@ -24,7 +24,7 @@ ClickButton button1(4, LOW, CLICKBTN_PULLUP);
 ClickButton button2(2, LOW, CLICKBTN_PULLUP);
 ClickButton button3(15, LOW, CLICKBTN_PULLUP);
 
-bool isbusy=false;
+bool isbusy = false;
 
 const char *settingsHTML = (char *)"/settings.html";
 const char *stylesCSS = (char *)"/styles.css";
@@ -66,7 +66,7 @@ NTP ntp(wifiUdp);
 
 void APCallback(WebServer *server) {
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
-        server->send_P(200,mimeCSS,CSS_styles);
+        server->send_P(200, mimeCSS, CSS_styles);
     });
     Serial.println("LOG: AP Mode Callback triggered.");
 }
@@ -77,52 +77,10 @@ void APICallback(WebServer *server) {
     configManager.clearWifiSettings(false);
   });
 
-  // 1. Обработчик для открытия страницы настроек по адресу http://192.168.50
-  server->on("/set", HTTPMethod::HTTP_GET, [server](){
-    Serial.println("LOG: Открываем кастомное окно настроек по адресу /set...");
+  // Стандартные роуты для отдачи веб-интерфейса ConfigManager
+  server->on("/settings.html", HTTPMethod::HTTP_GET, [server](){
     server->send_P(200, mimeHTML, HTML_settings);
   });
-
-  // 2. Исправленный обработчик: ловит данные формы методом POST на адрес /set, как прописано в pages.h
-    server->on("/set", HTTPMethod::HTTP_POST, [server](){
-    Serial.println("LOG: [WEB-POST] Получены новые настройки формы со страницы /set!");
-
-    if (server->hasArg("device_name")) strncpy(config.device_name, server->arg("device_name").c_str(), 32);
-    if (server->hasArg("telnr_1")) strncpy(config.telnr_1, server->arg("telnr_1").c_str(), 32);
-    if (server->hasArg("telnr_2")) strncpy(config.telnr_2, server->arg("telnr_2").c_str(), 32);
-    if (server->hasArg("telnr_3")) strncpy(config.telnr_3, server->arg("telnr_3").c_str(), 32);
-    if (server->hasArg("sip_ip"))   strncpy(config.sip_ip, server->arg("sip_ip").c_str(), 32);
-    if (server->hasArg("sip_user")) strncpy(config.sip_user, server->arg("sip_user").c_str(), 32);
-    if (server->hasArg("sip_pass")) strncpy(config.sip_pass, server->arg("sip_pass").c_str(), 32);
-
-    if (server->hasArg("amp_gain")) config.amp_gain = server->arg("amp_gain").toInt();
-    if (server->hasArg("mic_gain")) config.mic_gain = server->arg("mic_gain").toInt();
-    if (server->hasArg("tz_dst"))   config.tz_dst = server->arg("tz_dst").toInt();
-    if (server->hasArg("tz_std"))   config.tz_std = server->arg("tz_std").toInt();
-    if (server->hasArg("echodamping"))   config.echodamping = server->arg("echodamping").toInt();
-    if (server->hasArg("echothreshold")) config.echothreshold = server->arg("echothreshold").toInt();
-
-    if (server->hasArg("echocompensation")) {
-      config.echocompensation = true;
-    } else {
-      config.echocompensation = false;
-    }
-
-    configManager.save(); 
-    Serial.println("LOG: Настройки успешно записаны в NVS.");
-
-    // Отправляем полноценную страницу подтверждения сохранения
-    String response = "<html><head><meta charset='utf-8'><style>body{font-family:sans-serif;text-align:center;padding-top:50px;background:#f4f4f4;}</style></head>";
-    response += "<body><div style='background:#fff;display:inline-block;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);'>";
-    response += "<h2 style='color:#28a745;'>Настройки успешно сохранены!</h2>";
-    response += "<p>Плата перезагружается для запуска телефонии. Подождите 10 секунд...</p>";
-    response += "</div></body></html>";
-    server->send(200, "text/html", response);
-    
-    delay(2000);
-    ESP.restart();
-  });
-
 
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
     server->send_P(200, mimeCSS, CSS_styles);
@@ -152,21 +110,7 @@ void setup() {
   configManager.setAPName("voipdoorbell");
   configManager.setAPFilename("/index.html");
 
-  // БЛОК ДЕФОЛТНЫХ НАСТРОЕК ТЕПЕРЬ ПОЛНОСТЬЮ ЗАКОММЕНТИРОВАН!
-  // Память не будет затираться при перезагрузках.
-  /*
-  strcpy(config.device_name, "Doorbell");
-  strcpy(config.telnr_1, "100");
-  strcpy(config.telnr_2, "101");
-  strcpy(config.telnr_3, "102");
-  strcpy(config.sip_ip, "192.168.1.10");
-  strcpy(config.sip_user, "doorphone");
-  strcpy(config.sip_pass, "password");
-  meta.version = 1;
-  config.tz_dst = 120;
-  config.tz_std = 60;
-  */
-  
+  // Регистрация параметров для автоматического сохранения/загрузки через ConfigManager
   Serial.println("LOG: Adding parameters to ConfigManager...");
   configManager.addParameter("device_name", config.device_name, 32);
   configManager.addParameter("telnr_1", config.telnr_1, 32);
@@ -203,13 +147,13 @@ void setup() {
 }
 
 void loop() {
-  // Менеджер веб-страниц должен крутиться ВСЕГДА на первой строчке
+  // Менеджер веб-страниц и запросов должен крутиться ВСЕГДА на первой строчке
   configManager.loop();
 
-  // Если Wi-Fi подключен к роутеру (IP: 192.168.50.4)
+  // Если Wi-Fi подключен к роутеру
   if (WiFi.status() == WL_CONNECTED) {
     
-    // Безопасный запуск: активируем SIP только если IP-адрес задан (не пустой)
+    // Запускаем SIP только если IP-адрес задан
     if (strlen(config.sip_ip) >= 7) {
       
       if (!doorphonerunning) {
@@ -218,6 +162,9 @@ void loop() {
         Serial.print("LOG: Starting SIP module...");
         
         if (int result = doorphone.begin(config.sip_ip, config.sip_user, config.sip_pass) == VOIPPHONE_OK) {
+          doorphone.setAmpGain(config.amp_gain);
+          doorphone.setMicGain(config.mic_gain);
+          doorphone.setEchoCompensation(config.echocompensation, config.echothreshold, config.echodamping);
           Serial.println("[OK]");
           doorphonerunning = true;
         } else {
@@ -228,7 +175,6 @@ void loop() {
         }
       }
 
-      // Голосовой движок обрабатываем только если SIP успешно запущен
       if (doorphonerunning) {
         doorphone.loop();
       }
