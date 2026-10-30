@@ -183,43 +183,43 @@ esp_err_t VOIPPhone::writeToAmp(const void *src,size_t size, size_t *bytes_writt
 //
 // Send RTP packet every 20ms
 //
+//
+// Send RTP packet with test sine wave instead of mic
+//
 void VOIPPhone::tx_rtp(){
   uint8_t temp[160];
   static uint16_t sequenceNumber = 0;
   const uint32_t ssrc = 3124150;
   static uint32_t timestamp = 0;
+  static float sine_phase = 0;
   RTPPacket txRTPpkg;
   uint8_t packetBuffer[255];
 
-  for(int i=0;i<160;i++) {
-    //8192 13bit
-    //16777216 u24bit
-    SAMPLE_T sample = 0;
-    size_t num_bytes_read;
-    //i2s_read(I2S_PORT0,&sample,sizeof(SAMPLE_T),&num_bytes_read,portMAX_DELAY); // no timeout
-    readFromMic(&sample,sizeof(SAMPLE_T),&num_bytes_read);
-    if (num_bytes_read > 0) {
-      if(echocompensation) {
-        temp[i] = ALaw_Encode(MIC_CONVERT(sample)*mic_gain/echodamping);
-      } else {
-        temp[i] = ALaw_Encode(MIC_CONVERT(sample)*mic_gain);
-      }
-      
+  // Генерируем тестовую синусоиду (частота ~1000 Гц при частоте дискретизации 8000/16000 Гц)
+  for(int i = 0; i < 160; i++) {
+    // Синусоида амплитудой 8000
+    int16_t sample = (int16_t)(8000.0 * sin(sine_phase));
+    sine_phase += 2.0 * 3.14159265 * 1000.0 / 16000.0; // 1kHz tone for 16kHz sample rate
+    if (sine_phase > 2.0 * 3.14159265) {
+      sine_phase -= 2.0 * 3.14159265;
     }
+    
+    // Кодируем сгенерированный сэмпл в A-law
+    temp[i] = ALaw_Encode(sample);
   }
-  if(sequenceNumber==0) {
+
+  if(sequenceNumber == 0) {
     timestamp = 0;
   }
-  txRTPpkg = RTPPacket(temp, sequenceNumber++, ssrc, timestamp+=160,8,160);
+  
+  txRTPpkg = RTPPacket(temp, sequenceNumber++, ssrc, timestamp += 160, 8, 160);
   int length = txRTPpkg.serialize(packetBuffer);
+  
   IPAddress tempip;
   tempip.fromString(sip->GetSIPServerIP()); 
-  int beginOK = rtpudp.beginPacket(tempip, atoi(sip->audioport) );
-  if (beginOK == 0) {
-    //rtpudp.stop();
-  } else {
-    rtpudp.write(packetBuffer,length);
-    //int endOK = rtpudp.endPacket();
+  int beginOK = rtpudp.beginPacket(tempip, atoi(sip->audioport));
+  if (beginOK != 0) {
+    rtpudp.write(packetBuffer, length);
     rtpudp.endPacket();
   }
 }
