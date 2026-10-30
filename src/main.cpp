@@ -85,7 +85,6 @@ void APICallback(WebServer *server) {
   });
 
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
-    Serial.println("LOG: [WEB] Запрос стилей /styles.css");
     server->send_P(200, mimeCSS, CSS_styles);
   });
 
@@ -99,21 +98,8 @@ void APICallback(WebServer *server) {
     server->send(200, "text/plain", "Local Mode");
   });
 
-  // Принудительные эндпоинты для работы REST API настроек с подробным логированием
-  server->on("/settings", HTTPMethod::HTTP_GET, [server](){
-    Serial.println("LOG: [REST-GET] Получен запрос GET /settings (отправка конфигурации в браузер).");
-    configManager.handleRESTGet();
-  });
-
-  server->on("/settings", HTTPMethod::HTTP_PUT, [server](){
-    Serial.println("LOG: [REST-PUT] Получен запрос PUT /settings (сохранение настроек из браузера)...");
-    if (server->hasArg("plain")) {
-      Serial.print("LOG: [REST-PUT] Полученные данные JSON: ");
-      Serial.println(server->arg("plain"));
-    }
-    configManager.handleRESTPut();
-    Serial.println("LOG: [REST-PUT] Обработка PUT /settings завершена, изменения записаны в EEPROM.");
-  });
+  // УДАЛЕНЫ ручные вызовы server->on("/settings", ...) — 
+  // ConfigManager сам зарегистрирует их автоматически в startApi()!
 
   httpUpdate.setup(server);
   Serial.println("LOG: [APICallback] Все маршруты успешно зарегистрированы.");
