@@ -398,44 +398,46 @@ void Sip::HandleUdpPacket()
     ParseReturnParams(p);
     Ack(p);
   }
+  
   else if (   strstr(p, "SIP/2.0 183 ") == p // Session Progress
               || strstr(p, "SIP/2.0 180 ") == p ) // Ringing
   {
-    //
-    // Determine the audio port of the SIP server (Fritzbox RTP port)
-    //
-    // for example:
-    // m=audio 7078 RTP/AVP 8
-    //
-    // Todo: sscanf maybe a better method to do this
-    //
     Serial.println("DEBUG| SIP/2.0 183 or 180 received");
-    char *sdpportptr;
-    sdpportptr = strstr(p, " RTP/AVP 8");
+    
+    // Выводим весь пришедший SDP-пакет для отладки, чтобы видеть структуру
+    Serial.println("--- SDP START ---");
+    Serial.println(p);
+    Serial.println("--- SDP END ---");
+    
+    char *sdpportptr = strstr(p, "m=audio ");
+    if (sdpportptr == NULL) {
+      sdpportptr = strstr(p, "m=audio\t");
+    }
+    
     if(sdpportptr == NULL) {
-      Serial.println("DEBUG| RTP/AVP 8 not found");
+      Serial.println("DEBUG| m=audio line not found");
       audioport[0] = '\0';
       return;
     } else {
-       Serial.println("DEBUG| RTP/AVP 8 found");
+       Serial.println("DEBUG| m=audio line found");
     }
-    sdpportptr--;
-    int i=0;
-    while(*sdpportptr!=' ' || i>8) {
+
+    sdpportptr += 8;
+    int i = 0;
+    while (*sdpportptr >= '0' && *sdpportptr <= '9' && i < 6) {
+      audioport[i] = *sdpportptr;
+      sdpportptr++;
       i++;
-      sdpportptr--;
     }
-    sdpportptr++;
-    if(i<7) {
-      i=0;
-      while(*sdpportptr!=' ') {
-        audioport[i]=*sdpportptr;
-        sdpportptr++;
-        i++;
-      }
-      audioport[i]='\0';
-      Serial.println("DEBUG| Audio Port:"+(String)(audioport));
+    audioport[i] = '\0';
+
+    if (i > 0) {
+      Serial.println("DEBUG| Audio Port successfully parsed: " + (String)(audioport));
+    } else {
+      Serial.println("DEBUG| Failed to parse audio port");
+      audioport[0] = '\0';
     }
+
     ParseReturnParams(p);
   }
   else if (strstr(p, "SIP/2.0 100 ") == p)   // Trying
