@@ -188,24 +188,37 @@ esp_err_t VOIPPhone::writeToAmp(const void *src,size_t size, size_t *bytes_writt
 //
 void VOIPPhone::tx_rtp(){
   uint8_t temp[160];
+  size_t bytes_read = 0;
+  int32_t i2s_buffer[160]; // Буфер под 32-битные сэмплы от INMP441
+  
   static uint16_t sequenceNumber = 0;
   const uint32_t ssrc = 3124150;
   static uint32_t timestamp = 0;
-  static float sine_phase = 0;
   RTPPacket txRTPpkg;
   uint8_t packetBuffer[255];
 
-  // Генерируем тестовую синусоиду (частота ~1000 Гц при частоте дискретизации 8000/16000 Гц)
-  for(int i = 0; i < 160; i++) {
-    // Синусоида амплитудой 8000
-    int16_t sample = (int16_t)(8000.0 * sin(sine_phase));
-    sine_phase += 2.0 * 3.14159265 * 1000.0 / 16000.0; // 1kHz tone for 16kHz sample rate
-    if (sine_phase > 2.0 * 3.14159265) {
-      sine_phase -= 2.0 * 3.14159265;
-    }
+  // Читаем 160 сэмплов (каждый по 4 байта = 640 байт)
+  esp_err_t result = readFromMic(i2s_buffer, sizeof(i2s_buffer), &bytes_read);
+  
+  if (result == ESP_OK && bytes_read > 0) {
+    int samples_read = bytes_read / sizeof(int32_t);
     
-    // Кодируем сгенерированный сэмпл в A-law
-    temp[i] = ALaw_Encode(sample);
+    for(int i = 0; i < 160; i++) {
+      int16_t sample = 0;
+      if (i < samples_read) {
+        // INMP441 выдает 24-битный звук в 32-битном контейнере.
+        // Сдвигаем вправо (>> 14 или >> 16), чтобы получить нормальный 16-битный PCM.
+        // Если звук будет слишком громким/хрипящим, увеличьте сдвиг (например, до 16).
+        int32_t raw_sample = i2s_buffer[i];
+        sample = (int16_t)(raw_sample >> 14); 
+      }
+      
+      // Кодируем полученный сэмпл в A-law
+      temp[i] = ALaw_Encode(sample);
+    }
+  } else {
+    // Если микрофон не отдал данные, заполняем тишиной
+    memset(temp, 0xD5, 160); // 0xD5 — это тишина в A-law
   }
 
   if(sequenceNumber == 0) {
