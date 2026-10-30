@@ -77,10 +77,50 @@ void APICallback(WebServer *server) {
     configManager.clearWifiSettings(false);
   });
 
-  // ИЗМЕНИЛИ АДРЕС НА /set, ЧТОБЫ ОБЪЕХАТЬ ВНУТРЕННИЙ БАГ БИБЛИОТЕКИ С JSON
+  // 1. Обработчик для открытия страницы настроек по адресу http://192.168.50
   server->on("/set", HTTPMethod::HTTP_GET, [server](){
     Serial.println("LOG: Открываем кастомное окно настроек по адресу /set...");
     server->send_P(200, mimeHTML, HTML_settings);
+  });
+
+  // 2. Исправленный обработчик: ловит данные формы методом POST на адрес /set, как прописано в pages.h
+  server->on("/set", HTTPMethod::HTTP_POST, [server](){
+    Serial.println("LOG: [WEB-POST] Получены новые настройки формы со страницы /set!");
+
+    // Считываем все текстовые поля напрямую по их именам из HTML-формы
+    if (server->hasArg("device_name")) strncpy(config.device_name, server->arg("device_name").c_str(), 32);
+    if (server->hasArg("telnr_1")) strncpy(config.telnr_1, server->arg("telnr_1").c_str(), 32);
+    if (server->hasArg("telnr_2")) strncpy(config.telnr_2, server->arg("telnr_2").c_str(), 32);
+    if (server->hasArg("telnr_3")) strncpy(config.telnr_3, server->arg("telnr_3").c_str(), 32);
+    if (server->hasArg("sip_ip"))   strncpy(config.sip_ip, server->arg("sip_ip").c_str(), 32);
+    if (server->hasArg("sip_user")) strncpy(config.sip_user, server->arg("sip_user").c_str(), 32);
+    if (server->hasArg("sip_pass")) strncpy(config.sip_pass, server->arg("sip_pass").c_str(), 32);
+
+    // Считываем числовые поля
+    if (server->hasArg("amp_gain")) config.amp_gain = server->arg("amp_gain").toInt();
+    if (server->hasArg("mic_gain")) config.mic_gain = server->arg("mic_gain").toInt();
+    if (server->hasArg("tz_dst"))   config.tz_dst = server->arg("tz_dst").toInt();
+    if (server->hasArg("tz_std"))   config.tz_std = server->arg("tz_std").toInt();
+    if (server->hasArg("echodamping"))   config.echodamping = server->arg("echodamping").toInt();
+    if (server->hasArg("echothreshold")) config.echothreshold = server->arg("echothreshold").toInt();
+
+    // Считываем логический чекбокс эхоподавления
+    if (server->hasArg("echocompensation")) {
+      config.echocompensation = true;
+    } else {
+      config.echocompensation = false;
+    }
+
+    // Принудительно записываем обновленную структуру config во Flash-память прибора
+    configManager.save(); 
+    Serial.println("LOG: Настройки успешно сохранены в постоянную память (NVS).");
+
+    // Отвечаем браузеру обычным текстом "OK", чтобы скрипт jQuery вывел статус "Settings Updated"
+    server->send(200, "text/plain", "OK");
+    
+    Serial.println("LOG: Перезапуск платы через 2 секунды для запуска телефонии...");
+    delay(2000);
+    ESP.restart();
   });
 
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
@@ -95,60 +135,8 @@ void APICallback(WebServer *server) {
     server->send(200, "text/plain", "Local Mode");
   });
 
-  // ИСПРАВЛЕННЫЙ ОБРАБОТЧИК: ПРИНИМАЕТ МЕТОД "PUT" И ДЕКОДИРУЕТ JSON ОТ СТРАНИЦЫ
-  server->on("/settings", HTTPMethod::HTTP_PUT, [server](){
-    Serial.println("LOG: [WEB-PUT] Получены новые настройки в формате JSON!");
-    
-    String jsonBody = server->arg("plain");
-
-    Serial.print("LOG: Тело JSON: ");
-    Serial.println(jsonBody);
-    
-    DynamicJsonDocument doc(1536);
-    DeserializationError error = deserializeJson(doc, jsonBody);
-
-    if (error) {
-      Serial.print("LOG: [JSON ERROR] Ошибка разбора пакета: ");
-      Serial.println(error.c_str());
-      server->send(400, "text/plain", "Invalid JSON");
-      return;
-    }
-
-    // Раскладываем данные из JSON по переменным структуры config
-    if (doc.containsKey("device_name")) strncpy(config.device_name, doc["device_name"], 32);
-    if (doc.containsKey("telnr_1")) strncpy(config.telnr_1, doc["telnr_1"], 32);
-    if (doc.containsKey("telnr_2")) strncpy(config.telnr_2, doc["telnr_2"], 32);
-    if (doc.containsKey("telnr_3")) strncpy(config.telnr_3, doc["telnr_3"], 32);
-    if (doc.containsKey("sip_ip"))   strncpy(config.sip_ip, doc["sip_ip"], 32);
-    if (doc.containsKey("sip_user")) strncpy(config.sip_user, doc["sip_user"], 32);
-    if (doc.containsKey("sip_pass")) strncpy(config.sip_pass, doc["sip_pass"], 32);
-
-    if (doc.containsKey("amp_gain")) config.amp_gain = doc["amp_gain"].as<int>();
-    if (doc.containsKey("mic_gain")) config.mic_gain = doc["mic_gain"].as<int>();
-    if (doc.containsKey("tz_dst"))   config.tz_dst = doc["tz_dst"].as<int>();
-    if (doc.containsKey("tz_std"))   config.tz_std = doc["tz_std"].as<int>();
-    if (doc.containsKey("echodamping"))   config.echodamping = doc["echodamping"].as<int>();
-    if (doc.containsKey("echothreshold")) config.echothreshold = doc["echothreshold"].as<int>();
-
-    if (doc.containsKey("echocompensation")) {
-      config.echocompensation = doc["echocompensation"].as<bool>();
-    }
-
-    // Принудительно сохраняем данные во Flash-память
-    configManager.save(); 
-    Serial.println("LOG: Настройки сохранены в NVS.");
-
-    // Отвечаем jQuery кодом 200 OK, чтобы на веб-странице загорелось "Settings Updated"
-    server->send(200, "text/plain", "OK");
-    
-    Serial.println("LOG: Перезапуск платы через 2 секунды...");
-    delay(2000);
-    ESP.restart();
-  });
-
   httpUpdate.setup(server);
 }
-
 
 void setup() {
   Serial.begin(115200);
@@ -159,25 +147,24 @@ void setup() {
   pinMode(2, INPUT_PULLUP);
   pinMode(15, INPUT_PULLUP);
 
-  Serial.println("LOG: Pinmodes set, cleaning config strings...");
-  // Жестко обнуляем массивы памяти, чтобы ConfigManager не читал мусор из NVS
-  //memset(&config, 0, sizeof(Config));
+  Serial.println("LOG: Initializing ConfigManager names...");
+  configManager.setAPName("voipdoorbell");
+  configManager.setAPFilename("/index.html");
 
+  // БЛОК ДЕФОЛТНЫХ НАСТРОЕК ТЕПЕРЬ ПОЛНОСТЬЮ ЗАКОММЕНТИРОВАН!
+  // Память не будет затираться при перезагрузках.
+  /*
   strcpy(config.device_name, "Doorbell");
   strcpy(config.telnr_1, "100");
   strcpy(config.telnr_2, "101");
   strcpy(config.telnr_3, "102");
-  strcpy(config.sip_ip, "192.168.1.10"); // Дефолтный IP вашего Yate-сервера
+  strcpy(config.sip_ip, "192.168.1.10");
   strcpy(config.sip_user, "doorphone");
   strcpy(config.sip_pass, "password");
-
   meta.version = 1;
   config.tz_dst = 120;
   config.tz_std = 60;
-  
-  Serial.println("LOG: Initializing ConfigManager names...");
-  configManager.setAPName("voipdoorbell");
-  configManager.setAPFilename("/index.html");
+  */
   
   Serial.println("LOG: Adding parameters to ConfigManager...");
   configManager.addParameter("device_name", config.device_name, 32);
@@ -221,12 +208,14 @@ void loop() {
   // Если Wi-Fi подключен к роутеру (IP: 192.168.50.4)
   if (WiFi.status() == WL_CONNECTED) {
     
-    // ЗАЩИТА: Запускаем SIP только если IP-адрес сервера Yate БЫЛ ИЗМЕНЕН в настройках 
-    // (не равен дефолтному "192.168.1.10" и строка заполнена)
-    if (strlen(config.sip_ip) >= 7 && strcmp(config.sip_ip, "192.168.1.10") != 0) {
+    // Безопасный запуск: активируем SIP только если IP-адрес задан (не пустой)
+    if (strlen(config.sip_ip) >= 7) {
       
       if (!doorphonerunning) {
-        Serial.print("LOG: Valid Yate Server IP found! Starting SIP module...");
+        Serial.print("LOG: Target Yate Server IP found: ");
+        Serial.println(config.sip_ip);
+        Serial.print("LOG: Starting SIP module...");
+        
         if (int result = doorphone.begin(config.sip_ip, config.sip_user, config.sip_pass) == VOIPPHONE_OK) {
           Serial.println("[OK]");
           doorphonerunning = true;
@@ -243,7 +232,7 @@ void loop() {
         doorphone.loop();
       }
 
-      // Опрос кнопок
+      // Опрос кнопок звонка
       button1.Update();
       button2.Update();
       button3.Update();
@@ -274,4 +263,3 @@ void loop() {
     Serial.println("LOG: Call finished / Hangup.");
   }
 }
-
