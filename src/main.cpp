@@ -66,9 +66,10 @@ NTP ntp(wifiUdp);
 
 // 1. В режиме AP оставляем ConfigManager управлять своей стартовой страницей
 void APCallback(WebServer *server) {
-    // Отдаем главную страницу настройки Wi-Fi из pages.h
+    // Переопределяем корневой маршрут "/", чтобы отдавать HTML_index из PROGMEM (pages.h),
+    // обходя баг ConfigManager с обязательным чтением файлов из SPIFFS.
     server->on("/", HTTPMethod::HTTP_GET, [server](){
-        Serial.println("LOG: [WEB] Запрос главной страницы настройки Wi-Fi");
+        Serial.println("LOG: [WEB] Отдача HTML_index из PROGMEM (AP Mode)");
         server->send_P(200, "text/html", HTML_index);
     });
 
