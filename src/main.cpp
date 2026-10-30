@@ -8,14 +8,9 @@
 #include "ConfigManager.h"
 #include "voipphone.h"
 #include "ClickButton.h"
-#include <Adafruit_NeoPixel.h>
-#include <Dusk2Dawn.h>
 #include <TimeLib.h>
 #include "pages.h"
-
-#define WS2812PIN 32
-#define NUMPIXELS 3
-Adafruit_NeoPixel pixels(NUMPIXELS, WS2812PIN, NEO_GRB + NEO_KHZ400);
+#include <ArduinoJson.h>
 
 #define mDNSUpdate(c)  do {} while(0)
 using WebServerClass = WebServer;
@@ -29,12 +24,7 @@ ClickButton button1(4, LOW, CLICKBTN_PULLUP);
 ClickButton button2(2, LOW, CLICKBTN_PULLUP);
 ClickButton button3(15, LOW, CLICKBTN_PULLUP);
 
-bool islighton=false;
-bool isbusy=false;
-
-//
-// Config manager...
-//
+bool isbusy = false;
 
 const char *settingsHTML = (char *)"/settings.html";
 const char *stylesCSS = (char *)"/styles.css";
@@ -76,72 +66,32 @@ NTP ntp(wifiUdp);
 
 void APCallback(WebServer *server) {
     server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
-        //configManager.streamFile(stylesCSS, mimeCSS);
-        server->send_P(200,mimeCSS,CSS_styles);
+        server->send_P(200, mimeCSS, CSS_styles);
     });
-
-    DebugPrintln(F("AP Mode Enabled. You can call other functions that should run after a mode is enabled ... "));
+    Serial.println("LOG: AP Mode Callback triggered.");
 }
-
 
 void APICallback(WebServer *server) {
   server->on("/disconnect", HTTPMethod::HTTP_GET, [server](){
+    Serial.println("LOG: Получен веб-запрос /disconnect");
     configManager.clearWifiSettings(false);
   });
 
+  // Стандартные роуты для отдачи веб-интерфейса ConfigManager
   server->on("/settings.html", HTTPMethod::HTTP_GET, [server](){
-    //configManager.streamFile(settingsHTML, mimeHTML);
-    server->send_P(200,mimeHTML,HTML_settings);
+    server->send_P(200, mimeHTML, HTML_settings);
   });
 
-  // NOTE: css/js can be embedded in a single page HTML
   server->on("/styles.css", HTTPMethod::HTTP_GET, [server](){
-    //configManager.streamFile(stylesCSS, mimeCSS);
-    server->send_P(200,mimeCSS,CSS_styles);
+    server->send_P(200, mimeCSS, CSS_styles);
   });
 
   server->on("/main.js", HTTPMethod::HTTP_GET, [server](){
-    //configManager.streamFile(mainJS, mimeJS);
-    server->send_P(200,mimeJS,JS_main);
+    server->send_P(200, mimeJS, JS_main);
   });
   
   server->on("/datetime", HTTPMethod::HTTP_GET, [server](){
-    server->send(200, "text/plain", ntp.formattedTime("%d.%m.%Y %X"));
-  });
-  
-  server->on("/debug", HTTPMethod::HTTP_GET, [server](){
-    String output = String(ntp.formattedTime("%d.%m.%Y %X"))+"</br>";
-    Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
-    int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-    int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-    int min = ntp.hours()*60+ntp.minutes();
-    output += "Now:"+String(min)+"</br>";
-    output += "Sunrise:"+String(sr_min)+"</br>";
-    output += "Sunset:"+String(ss_min)+"</br>";
-    output += "LED0:"+String(pixels.getPixelColor(0));
-    output += "LED1:"+String(pixels.getPixelColor(1));
-    output += "LED2:"+String(pixels.getPixelColor(2));
-    server->send(200, mimeHTML, output);
-  });
-
-  server->on("/restart", HTTPMethod::HTTP_GET, [server](){
-    ESP.restart();
-    server->send(200, "text/plain", "restarting...");
-  });
-
-  server->on("/dial1", HTTPMethod::HTTP_GET, [server](){
-    doorphone.dial(config.telnr_1,config.device_name);
-    server->send(200, "text/plain", "ok");
-  });
-
-  server->on("/dial2", HTTPMethod::HTTP_GET, [server](){
-    doorphone.dial(config.telnr_2,config.device_name);
-    server->send(200, "text/plain", "ok");
-  });
-
-  server->on("/dial3", HTTPMethod::HTTP_GET, [server](){
-    doorphone.dial(config.telnr_3,config.device_name);
-    server->send(200, "text/plain", "ok");
+    server->send(200, "text/plain", "Local Mode");
   });
 
   httpUpdate.setup(server);
@@ -150,32 +100,18 @@ void APICallback(WebServer *server) {
 void setup() {
   Serial.begin(115200);
   Serial.println();
-  Serial.println("Startup...");
-  pixels.begin();
-  pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-  pixels.setPixelColor(1, pixels.Color(0, 255, 0));
-  pixels.setPixelColor(2, pixels.Color(0, 0, 255));
-  pixels.show();
+  Serial.println("Startup Autonomous Mode...");
 
-  pinMode(4,INPUT_PULLUP);
-  pinMode(2,INPUT_PULLUP);
-  pinMode(15,INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);
+  pinMode(2, INPUT_PULLUP);
+  pinMode(15, INPUT_PULLUP);
 
-  strcpy(config.device_name,"\0");
-  strcpy(config.telnr_1,"\0");
-  strcpy(config.telnr_2,"\0");
-  strcpy(config.telnr_3,"\0");
-  strcpy(config.sip_ip,"\0");
-  strcpy(config.sip_user,"\0");
-  strcpy(config.sip_pass,"\0");
-
-  meta.version = 1;
-  config.tz_dst = 120;
-  config.tz_std = 60;
-  // Setup config manager
+  Serial.println("LOG: Initializing ConfigManager names...");
   configManager.setAPName("voipdoorbell");
   configManager.setAPFilename("/index.html");
-  // Settings variables 
+
+  // Регистрация параметров для автоматического сохранения/загрузки через ConfigManager
+  Serial.println("LOG: Adding parameters to ConfigManager...");
   configManager.addParameter("device_name", config.device_name, 32);
   configManager.addParameter("telnr_1", config.telnr_1, 32);
   configManager.addParameter("telnr_2", config.telnr_2, 32);
@@ -198,103 +134,79 @@ void setup() {
   configManager.addParameter("echocompensation", &config.echocompensation);
   configManager.addParameter("echodamping", &config.echodamping);
   configManager.addParameter("echothreshold", &config.echothreshold);
-  // Meta Settings
   configManager.addParameter("version", &meta.version, get);
-  // Init Callbacks
+  
+  Serial.println("LOG: Setting ConfigManager callbacks...");
   configManager.setAPCallback(APCallback);
   configManager.setAPICallback(APICallback);
+  
+  Serial.println("LOG: Running configManager.begin()...");
   configManager.begin(config);
 
-  ntp.ruleDST("CEST", Last, Sun, Mar, 2, config.tz_dst); // last sunday in march 2:00, timezone +120min (+1 GMT + 1h summertime offset)
-  ntp.ruleSTD("CET", Last, Sun, Oct, 3, config.tz_std); // last sunday in october 3:00, timezone +60min (+1 GMT)
-  ntp.begin();
+  Serial.println("LOG: Setup finished successfully!");
 }
 
 void loop() {
-  if (WiFi.status() == WL_CONNECTED ) {
-    ntp.update();
-    if(strlen(config.sip_ip)<7) {
-      //Serial.println("Configuration fault.");
-    } else {
-      if( !doorphonerunning ) {
-        Serial.print("Online. Starting sip modul...");
-        if(int result = doorphone.begin(config.sip_ip,config.sip_user,config.sip_pass)==VOIPPHONE_OK) {
+  // Менеджер веб-страниц и запросов должен крутиться ВСЕГДА на первой строчке
+  configManager.loop();
+
+  // Если Wi-Fi подключен к роутеру
+  if (WiFi.status() == WL_CONNECTED) {
+    
+    // Запускаем SIP только если IP-адрес задан
+    if (strlen(config.sip_ip) >= 7) {
+      
+      if (!doorphonerunning) {
+        Serial.print("LOG: Target Yate Server IP found: ");
+        Serial.println(config.sip_ip);
+        Serial.print("LOG: Starting SIP module...");
+        
+        if (int result = doorphone.begin(config.sip_ip, config.sip_user, config.sip_pass) == VOIPPHONE_OK) {
           doorphone.setAmpGain(config.amp_gain);
           doorphone.setMicGain(config.mic_gain);
-          doorphone.setEchoCompensation(config.echocompensation,config.echothreshold,config.echodamping);
+          doorphone.setEchoCompensation(config.echocompensation, config.echothreshold, config.echodamping);
           Serial.println("[OK]");
+          doorphonerunning = true;
         } else {
-          Serial.print("[ERROR CODE:"+(String)result+"]");
+          Serial.print("[ERROR CODE:");
+          Serial.print(result);
+          Serial.println("]");
+          delay(5000);
         }
-        doorphonerunning = true;
-        /*pixels.setPixelColor(0, pixels.Color(255, 255, 255));
-        pixels.setPixelColor(1, pixels.Color(255, 255, 255));
-        pixels.setPixelColor(2, pixels.Color(255, 255, 255));
-        pixels.show();
-        pixels.clear();
-        pixels.show();
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-        pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-        pixels.setPixelColor(2, pixels.Color(0, 0, 0));*/
-        pixels.clear();
-        pixels.show();
       }
+
+      if (doorphonerunning) {
+        doorphone.loop();
+      }
+
+      // Опрос кнопок звонка
       button1.Update();
       button2.Update();
       button3.Update();
-      if(button1.clicks==1) {
-        Serial.println("Button1 pressed. Dialing...");
-        doorphone.dial(config.telnr_1,config.device_name);
-        pixels.setPixelColor(2, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        pixels.show();
+
+      if (button1.clicks == 1) {
+        Serial.println("Button1 pressed. Dialing via Yate...");
+        doorphone.dial(config.telnr_1, config.device_name);
         isbusy = true;
-      } else if(button2.clicks==1) {
-        Serial.println("Button2 pressed. Dialing...");
-        doorphone.dial(config.telnr_2,config.device_name);
-        pixels.setPixelColor(1, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        pixels.show();
+      } else if (button2.clicks == 1) {
+        Serial.println("Button2 pressed. Dialing via Yate...");
+        doorphone.dial(config.telnr_2, config.device_name);
         isbusy = true;
-      } else if(button3.clicks==1) {
-        Serial.println("Button3 pressed. Dialing...");
-        doorphone.dial(config.telnr_3,config.device_name);
-        pixels.setPixelColor(0, pixels.Color(config.ring_r, config.ring_g, config.ring_b));
-        pixels.show();
+      } else if (button3.clicks == 1) {
+        Serial.println("Button3 pressed. Dialing via Yate...");
+        doorphone.dial(config.telnr_3, config.device_name);
         isbusy = true;
       }
     }
+  } else {
+    if (doorphonerunning) {
+      doorphonerunning = false;
+      Serial.println("LOG: Wi-Fi status changed (disconnected).");
+    }
   }
-  
-  configManager.loop();
-  doorphone.loop();
 
-  // hangup
-  if(isbusy && !doorphone.isBusy()) {
+  if (isbusy && !doorphone.isBusy()) {
     isbusy = false;
-    pixels.clear();
-    pixels.show();
-    islighton = false;
-  }
-
-  Dusk2Dawn location = Dusk2Dawn(config.lat, config.lon, config.tz_std/60);
-  int sr_min = location.sunrise( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-  int ss_min = location.sunset( ntp.year(), ntp.month(), ntp.day(), ntp.isDST() );
-  int min = ntp.hours()*60+ntp.minutes();
-  if(min > ss_min || min < sr_min) { // lights on
-    if (!islighton) {
-      islighton = true;
-      pixels.setPixelColor(0, pixels.Color(config.light_r, config.light_g, config.light_b));
-      pixels.setPixelColor(1, pixels.Color(config.light_r, config.light_g, config.light_b));
-      pixels.setPixelColor(2, pixels.Color(config.light_r, config.light_g, config.light_b));
-      pixels.show();
-    }
-  } else { // lights off
-    if (islighton) {
-      islighton = false;
-      pixels.clear();
-      pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(1, pixels.Color(0, 0, 0));
-      pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-      pixels.show();
-    }
+    Serial.println("LOG: Call finished / Hangup.");
   }
 }
