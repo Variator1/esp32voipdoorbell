@@ -90,6 +90,15 @@ void VOIPPhone::loop() {
   }
 }
 
+//
+// Handle SIP protocol loop
+//
+void VOIPPhone::handleSIP() {
+  if (sip != NULL) {
+    sip->HandleUdpPacket(); // Опрашиваем входящие SIP-пакеты
+  }
+}
+
 
 void VOIPPhone::setMicGain(uint8_t gain) {
   mic_gain = gain;
