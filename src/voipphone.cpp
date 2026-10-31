@@ -56,38 +56,14 @@ void VOIPPhone::dial(const char *number,const char *id) {
 //
 
 void VOIPPhone::loop() {
-  // Обрабатываем входящие пакеты SIP и UDP
+  // 1. Обрабатываем SIP-стек (прием пакетов, пинг)
   handleSIP();
+
+  // 2. Проверяем состояние вызова (автоматически запускает/останавливает таймер RTP)
+  handleOutgoingRTP();
+
+  // 3. Принимаем входящий звук с динамика
   handleIncommingRTP();
-
-  // Проверяем, идет ли активный звонок
-  if (sip != NULL && sip->audioport[0] != '\0') {
-    static uint32_t lastRtpTime = 0;
-    uint32_t currentMillis = millis();
-
-    // Проверяем интервал между отправками RTP-пакетов
-    if (lastRtpTime != 0) {
-      uint32_t diff = currentMillis - lastRtpTime;
-      // Если интервал превысил 30 мс (при норме 20 мс), фиксируем задержку в логах
-      if (diff > 30) {
-        Serial.printf("DEBUG_LOOP| Warning: RTP interval too long: %u ms\n", diff);
-      }
-    }
-
-    if (currentMillis - lastRtpTime >= 20) {
-      lastRtpTime = currentMillis; 
-      
-      // Замеряем время выполнения tx_rtp() (чтение микрофона + отправка)
-      uint32_t t_start = micros();
-      tx_rtp(); 
-      uint32_t t_duration = micros() - t_start;
-
-      // Если отправка заняла больше 5 мс, это тоже может портить тайминги
-      if (t_duration > 5000) {
-        Serial.printf("DEBUG_LOOP| Warning: tx_rtp took too long: %u us\n", t_duration);
-      }
-    }
-  }
 }
 
 //
