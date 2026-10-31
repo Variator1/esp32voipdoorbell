@@ -58,7 +58,7 @@ void VOIPPhone::dial(const char *number,const char *id) {
 void VOIPPhone::loop() {
   // Обрабатываем входящие пакеты SIP и UDP
   handleSIP();
-  handleIncomingRTP();
+  handleIncommingRTP();
 
   // Проверяем, идет ли активный звонок
   if (sip != NULL && sip->audioport[0] != '\0') {
