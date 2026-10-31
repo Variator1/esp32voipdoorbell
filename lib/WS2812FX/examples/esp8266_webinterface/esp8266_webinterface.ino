@@ -176,6 +176,8 @@ void wifi_setup() {
     }
   }
 
+  WiFi.setSleep(false);
+
   Serial.println("");
   Serial.println("WiFi connected");  
   Serial.print("IP address: ");

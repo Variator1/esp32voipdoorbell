@@ -55,19 +55,38 @@ void VOIPPhone::dial(const char *number,const char *id) {
 // Loop
 //
 
-void VOIPPhone::loop(void) {
-  // Если указатель sip еще не создан (begin не вызывался), 
-  // мгновенно и безопасно выходим из функции, игнорируя loop
-  if (sip == NULL) {
-    return;
-  }
+void VOIPPhone::loop() {
+  // Обрабатываем входящие пакеты SIP и UDP
+  handleSIP();
+  handleIncomingRTP();
 
-  if(WiFi.status() == WL_CONNECTED) {
-    handleIncommingRTP();
-    handleOutgoingRTP();
-    
-    // Теперь вызов защищен на 100%
-    sip->HandleUdpPacket();
+  // Проверяем, идет ли активный звонок
+  if (sip != NULL && sip->audioport[0] != '\0') {
+    static uint32_t lastRtpTime = 0;
+    uint32_t currentMillis = millis();
+
+    // Проверяем интервал между отправками RTP-пакетов
+    if (lastRtpTime != 0) {
+      uint32_t diff = currentMillis - lastRtpTime;
+      // Если интервал превысил 30 мс (при норме 20 мс), фиксируем задержку в логах
+      if (diff > 30) {
+        Serial.printf("DEBUG_LOOP| Warning: RTP interval too long: %u ms\n", diff);
+      }
+    }
+
+    if (currentMillis - lastRtpTime >= 20) {
+      lastRtpTime = currentMillis; 
+      
+      // Замеряем время выполнения tx_rtp() (чтение микрофона + отправка)
+      uint32_t t_start = micros();
+      tx_rtp(); 
+      uint32_t t_duration = micros() - t_start;
+
+      // Если отправка заняла больше 5 мс, это тоже может портить тайминги
+      if (t_duration > 5000) {
+        Serial.printf("DEBUG_LOOP| Warning: tx_rtp took too long: %u us\n", t_duration);
+      }
+    }
   }
 }
 
@@ -187,6 +206,17 @@ esp_err_t VOIPPhone::writeToAmp(const void *src,size_t size, size_t *bytes_writt
 // Send RTP packet with test sine wave instead of mic
 //
 void VOIPPhone::tx_rtp(){
+  static uint32_t last_send_time = 0;
+  uint32_t now = millis();
+  if (last_send_time != 0) {
+    uint32_t diff = now - last_send_time;
+    // Если интервал между отправками пакетов сильно отличается от 20 мс (например, > 35 мс)
+    if (diff > 35) {
+      Serial.printf("DEBUG_RTP| Warning: RTP packet interval too long: %u ms\n", diff);
+    }
+  }
+  last_send_time = now;
+
   uint8_t temp[160];
   size_t bytes_read = 0;
   int32_t i2s_buffer[160]; 
