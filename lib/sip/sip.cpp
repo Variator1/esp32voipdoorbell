@@ -390,7 +390,9 @@ void Sip::HandleUdpPacket()
   else if (strstr(p, "SIP/2.0 200") == p)    // OK
   { 
     Serial.println("DEBUG| SIP/2.0 200 OK received");
-    iMaxTime = 60 * 1000;
+
+    iRingTime = Millis();
+    iMaxTime = 3 * 60 * 1000;
     Serial.println("DEBUG| Set timeout to 60 sec");
     
     char *sdpportptr = strstr(p, "m=audio ");

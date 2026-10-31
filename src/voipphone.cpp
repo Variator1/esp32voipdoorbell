@@ -193,14 +193,27 @@ esp_err_t VOIPPhone::writeToAmp(const void *src,size_t size, size_t *bytes_writt
 void VOIPPhone::tx_rtp(){
   static uint32_t last_send_time = 0;
   uint32_t now = millis();
+  
   if (last_send_time != 0) {
     uint32_t diff = now - last_send_time;
-    // Если интервал между отправками пакетов сильно отличается от 20 мс (например, > 35 мс)
-    if (diff > 35) {
+    
+    // Если разница больше 10 секунд — это старт нового звонка.
+    // Просто обновляем таймер, но НЕ делаем return, чтобы пакет отправился!
+    if (diff > 10000) {
+      last_send_time = now;
+    }
+    // Если это текущий разговор, проверяем на реальные задержки (> 35 мс)
+    else if (diff > 35) {
       Serial.printf("DEBUG_RTP| Warning: RTP packet interval too long: %u ms\n", diff);
     }
   }
-  last_send_time = now;
+  
+  // Если это самый первый запуск в жизни (last_send_time == 0)
+  if (last_send_time == 0) {
+    last_send_time = now;
+  } else {
+    last_send_time = now; // обновляем для следующего пакета
+  }
 
   uint8_t temp[160];
   size_t bytes_read = 0;
