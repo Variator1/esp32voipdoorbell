@@ -40,7 +40,11 @@ class VOIPPhone {
     void setAmpGain(uint8_t gain);
     bool isBusy(void);
     void setEchoCompensation(bool enable, long threshold_level, uint8_t damping);
-  private:
+    bool isIncomingCall();
+    void answerIncomingCall();
+    void bye();
+    
+    private:
     int initi2samp(void);
     int initi2smic(void);
     static esp_err_t readFromMic(void *dest,size_t size,size_t *bytes_read);
