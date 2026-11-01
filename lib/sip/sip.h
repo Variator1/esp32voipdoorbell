@@ -5,7 +5,7 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
-bool incomingCall = false; // Флаг: идет входящий вызов
+extern bool incomingCall; // Объявление, что переменная существует где-то еще
 
 class Sip
 {
