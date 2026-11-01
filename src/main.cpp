@@ -118,7 +118,6 @@ void setup() {
   pinMode(2, INPUT_PULLUP);
   pinMode(15, INPUT_PULLUP);
 
-  // Инициализация полей по умолчанию перед чтением из EEPROM
   strcpy(config.device_name, "\0");
   strcpy(config.telnr_1, "\0");
   strcpy(config.telnr_2, "\0");
@@ -131,11 +130,11 @@ void setup() {
   config.tz_dst = 120;
   config.tz_std = 60;
 
-  Serial.println("LOG: [SETUP] Инициализация имен ConfigManager...");
+  // Настройки ConfigManager точно как в архиве
   configManager.setAPName("voipdoorbell");
-  //configManager.setAPFilename("/index.html");
+  configManager.setAPFilename("/index.html");
 
-  Serial.println("LOG: [SETUP] Регистрация параметров в ConfigManager...");
+  // Регистрация параметров
   configManager.addParameter("device_name", config.device_name, 32);
   configManager.addParameter("telnr_1", config.telnr_1, 32);
   configManager.addParameter("telnr_2", config.telnr_2, 32);
@@ -159,14 +158,13 @@ void setup() {
   configManager.addParameter("echodamping", &config.echodamping);
   configManager.addParameter("echothreshold", &config.echothreshold);
   
-  // Возвращаем параметр версии для корректного управления EEPROM
-  configManager.addParameter("version", &meta.version);
+  // Возвращаем мета-параметр с флагом get, как в рабочем архиве
+  configManager.addParameter("version", &meta.version, get);
   
-  Serial.println("LOG: [SETUP] Установка колбэков ConfigManager...");
+  // Колбэки
   configManager.setAPCallback(APCallback);
   configManager.setAPICallback(APICallback);
   
-  Serial.println("LOG: [SETUP] Запуск configManager.begin(). Чтение конфигурации из EEPROM...");
   configManager.begin(config);
 
   Serial.println("LOG: [SETUP] Текущие значения после чтения из памяти:");
