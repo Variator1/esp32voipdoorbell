@@ -118,6 +118,19 @@ void setup() {
   pinMode(2, INPUT_PULLUP);
   pinMode(15, INPUT_PULLUP);
 
+  // Инициализация полей по умолчанию перед чтением из EEPROM
+  strcpy(config.device_name, "\0");
+  strcpy(config.telnr_1, "\0");
+  strcpy(config.telnr_2, "\0");
+  strcpy(config.telnr_3, "\0");
+  strcpy(config.sip_ip, "\0");
+  strcpy(config.sip_user, "\0");
+  strcpy(config.sip_pass, "\0");
+
+  meta.version = 1;
+  config.tz_dst = 120;
+  config.tz_std = 60;
+
   Serial.println("LOG: [SETUP] Инициализация имен ConfigManager...");
   configManager.setAPName("voipdoorbell");
   //configManager.setAPFilename("/index.html");
@@ -146,6 +159,8 @@ void setup() {
   configManager.addParameter("echodamping", &config.echodamping);
   configManager.addParameter("echothreshold", &config.echothreshold);
   
+  // Возвращаем параметр версии для корректного управления EEPROM
+  configManager.addParameter("version", &meta.version);
   
   Serial.println("LOG: [SETUP] Установка колбэков ConfigManager...");
   configManager.setAPCallback(APCallback);
