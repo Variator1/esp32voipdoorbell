@@ -5,6 +5,8 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
+bool incomingCall = false; // Флаг: идет входящий вызов
+
 class Sip
 {
     WiFiUDP     udp;
@@ -58,5 +60,8 @@ class Sip
     const char* GetSIPServerIP(void);
     char        audioport[7];
     
+    bool isIncomingCall() { return incomingCall; }
+    void AnswerIncomingCall(); // Метод для ответа на звонок
+    void bye();
 };
 #endif

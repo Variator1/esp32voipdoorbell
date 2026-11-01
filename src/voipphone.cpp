@@ -51,6 +51,31 @@ void VOIPPhone::dial(const char *number,const char *id) {
   DebugPrintln("sip->Dial executed");
 }
 
+// === ДОБАВЛЯЕМ НАШИ ОБЕРТКИ ЗДЕСЬ ===
+bool VOIPPhone::isIncomingCall() {
+  if (sip != NULL) {
+    return sip->isIncomingCall();
+  }
+  return false;
+}
+
+void VOIPPhone::answerIncomingCall() {
+  if (sip != NULL) {
+    DebugPrintln("Answering incoming call");
+    i2s_start(I2S_PORT1);
+    rx_streamisrunning = true;
+    sip->AnswerIncomingCall();
+    DebugPrintln("sip->AnswerIncomingCall executed");
+  }
+}
+
+void VOIPPhone::bye() {
+  if (sip != NULL) {
+    DebugPrintln("Sending BYE");
+    sip->Bye(0);
+  }
+}
+
 //
 // Loop
 //

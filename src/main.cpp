@@ -195,29 +195,38 @@ void loop() {
       button2.Update();
       button3.Update();
 
+      // --- BUTTON 1: Универсальная (Набор telnr_1 / Ответ / Сброс) ---
       if (button1.clicks == 1) {
-        Serial.println("LOG: [BUTTON] Button1 pressed. Dialing via Yate...");
-        doorphone.dial(config.telnr_1, config.device_name);
-        isbusy = true;
-      } else if (button2.clicks == 1) {
-        Serial.println("LOG: [BUTTON] Button2 pressed. Dialing via Yate...");
-        doorphone.dial(config.telnr_2, config.device_name);
-        isbusy = true;
-      } else if (button3.clicks == 1) {
-        Serial.println("LOG: [BUTTON] Button3 pressed. Dialing via Yate...");
-        doorphone.dial(config.telnr_3, config.device_name);
-        isbusy = true;
+          if (doorphone.isIncomingCall()) {
+              Serial.println("LOG: [BUTTON] Button1 pressed. Answering incoming call...");
+              doorphone.answerIncomingCall();
+              isbusy = true;
+          } 
+          else if (!isbusy) {
+              Serial.println("LOG: [BUTTON] Button1 pressed. Dialing telnr_1 via Yate...");
+              doorphone.dial(config.telnr_1, config.device_name);
+              isbusy = true;
+          } 
+          else {
+              Serial.println("LOG: [BUTTON] Button1 pressed. Hanging up...");
+              doorphone.bye(); // Или ваш метод сброса
+              isbusy = false;
+          }
+      } 
+      // --- BUTTON 2: Набор telnr_2 ---
+      else if (button2.clicks == 1) {
+          if (!isbusy && !doorphone.isIncomingCall()) {
+              Serial.println("LOG: [BUTTON] Button2 pressed. Dialing telnr_2 via Yate...");
+              doorphone.dial(config.telnr_2, config.device_name);
+              isbusy = true;
+          }
+      } 
+      // --- BUTTON 3: Набор telnr_3 ---
+      else if (button3.clicks == 1) {
+          if (!isbusy && !doorphone.isIncomingCall()) {
+              Serial.println("LOG: [BUTTON] Button3 pressed. Dialing telnr_3 via Yate...");
+              doorphone.dial(config.telnr_3, config.device_name);
+              isbusy = true;
+          }
       }
-    }
-  } else {
-    if (doorphonerunning) {
-      doorphonerunning = false;
-      Serial.println("LOG: [WIFI] Wi-Fi status changed (disconnected).");
-    }
-  }
-
-  if (isbusy && !doorphone.isBusy()) {
-    isbusy = false;
-    Serial.println("LOG: [SIP] Call finished / Hangup.");
-  }
 }

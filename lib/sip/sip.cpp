@@ -75,6 +75,44 @@ bool Sip::Dial(const char *DialNr, const char *DialDesc, int MaxDialSec)
   return true;
 }
 
+void Sip::AnswerIncomingCall() {
+  if (!incomingCall) return;
+
+  char response[1024];
+  snprintf(response, sizeof(response),
+    "SIP/2.0 200 OK\r\n"
+    "Via: %s\r\n"
+    "From: %s\r\n"
+    "To: %s;tag=esp32tag\r\n"
+    "Call-ID: %s\r\n"
+    "CSeq: %u INVITE\r\n"
+    "Contact: <sip:%s@%s:%d>\r\n"
+    "Content-Type: application/sdp\r\n"
+    "Content-Length: 142\r\n\r\n" // Или динамический расчет длины SDP
+    "v=0\r\n"
+    "o=- 389163 389163 IN IP4 %s\r\n"
+    "s=ESP32 SIP Phone\r\n"
+    "c=IN IP4 %s\r\n"
+    "t=0 0\r\n"
+    "m=audio %s RTP/AVP 8\r\n"
+    "a=rtpmap:8 PCMA/8000\r\n",
+    cVia, cFrom, cTo, cCallID, iLastCSeq,
+    pDialNr ? pDialNr : "esp32", localIP, localPort,
+    localIP, localIP, audioport
+  );
+
+  udp.beginPacket(sipServerIP, sipServerPort);
+  udp.write((uint8_t*)response, strlen(response));
+  udp.endPacket();
+
+  Serial.println("DEBUG| Sent 200 OK for incoming call");
+  
+  // Переводим устройство в режим активного разговора (аналогично успешному исходящему вызову)
+  iRingTime = Millis();
+  iMaxTime = 3 * 60 * 1000; // Таймаут разговора, например, 3 минуты
+  incomingCall = false;
+}
+
 void Sip::Cancel(int cseq)
 {
   if (caRead[0] == 0)
@@ -380,6 +418,16 @@ void Sip::HandleUdpPacket()
     Ack(p);
     Invite(p);
   }
+
+// Вставляем сюда обработку входящего INVITE:
+  else if (strstr(p, "INVITE ") == p)
+  {
+    Serial.println("DEBUG| Incoming SIP INVITE received");
+    incomingCall = true;
+    ParseReturnParams(p);
+    SendRinging(p); // Метод отправки 180 Ringing
+  }
+
   else if (strstr(p, "BYE") == p)
   {
     Serial.println("DEBUG| SIP/BYE received");
