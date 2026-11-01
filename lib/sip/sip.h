@@ -40,7 +40,7 @@ class Sip
     int         GrepInteger(const char *p, const char *psearch);
     void        Ack(const char *pIn);
     void        Cancel(int seqn);
-    void        Bye(int cseq);
+    // Удалили Bye из private
     void        Ok(const char *pIn);
     void        Invite(const char *pIn = 0);
 
@@ -62,6 +62,6 @@ class Sip
     
     bool isIncomingCall() { return incomingCall; }
     void AnswerIncomingCall(); // Метод для ответа на звонок
-    void bye();
+    void Bye(int cseq);        // Перенесли Bye(int cseq) в public с правильным регистром
 };
 #endif

@@ -209,7 +209,7 @@ void loop() {
           } 
           else {
               Serial.println("LOG: [BUTTON] Button1 pressed. Hanging up...");
-              doorphone.bye(); // Или ваш метод сброса
+              doorphone.bye();
               isbusy = false;
           }
       } 
@@ -228,8 +228,20 @@ void loop() {
               doorphone.dial(config.telnr_3, config.device_name);
               isbusy = true;
           }
-        }
+      }
+    } // <--- Закрывает if (strlen(config.sip_ip) >= 7)
+  }   // <--- Закрывает if (WiFi.status() == WL_CONNECTED)
+  else {
+    if (doorphonerunning) {
+      doorphonerunning = false;
+      Serial.println("LOG: [WIFI] Wi-Fi status changed (disconnected).");
     }
+  }
+
+  if (isbusy && !doorphone.isBusy()) {
+    isbusy = false;
+    Serial.println("LOG: [SIP] Call finished / Hangup.");
+  }
 }
 
       
