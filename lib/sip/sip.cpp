@@ -110,19 +110,7 @@ void Sip::AnswerIncomingCall() {
   iRingTime = Millis();
   iMaxTime = 3 * 60 * 1000; // Таймаут разговора 3 минуты
   incomingCall = false;
-}
-
-  udp.beginPacket(sipServerIP, sipServerPort);
-  udp.write((uint8_t*)response, strlen(response));
-  udp.endPacket();
-
-  Serial.println("DEBUG| Sent 200 OK for incoming call");
-  
-  // Переводим устройство в режим активного разговора (аналогично успешному исходящему вызову)
-  iRingTime = Millis();
-  iMaxTime = 3 * 60 * 1000; // Таймаут разговора, например, 3 минуты
-  incomingCall = false;
-}
+} // <--- Вот здесь заканчивается метод AnswerIncomingCall()
 
 void Sip::Cancel(int cseq)
 {
