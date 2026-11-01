@@ -79,27 +79,38 @@ void Sip::AnswerIncomingCall() {
   if (!incomingCall) return;
 
   char response[1024];
+  
+  // Формируем ответ 200 OK, используя уже сохраненные в caRead параметры (Call-ID, From, Via, To)
+  // и известные переменные pSipIp, pMyIp, iSipPort
   snprintf(response, sizeof(response),
     "SIP/2.0 200 OK\r\n"
-    "Via: %s\r\n"
-    "From: %s\r\n"
-    "To: %s;tag=esp32tag\r\n"
-    "Call-ID: %s\r\n"
-    "CSeq: %u INVITE\r\n"
+    "%s" // Здесь подставятся Via, From, To, Call-ID из caRead
+    "CSeq: 1 INVITE\r\n"
     "Contact: <sip:%s@%s:%d>\r\n"
     "Content-Type: application/sdp\r\n"
-    "Content-Length: 142\r\n\r\n" // Или динамический расчет длины SDP
+    "Content-Length: 142\r\n\r\n"
     "v=0\r\n"
     "o=- 389163 389163 IN IP4 %s\r\n"
     "s=ESP32 SIP Phone\r\n"
     "c=IN IP4 %s\r\n"
     "t=0 0\r\n"
-    "m=audio %s RTP/AVP 8\r\n"
+    "m=audio 1234 RTP/AVP 8\r\n"
     "a=rtpmap:8 PCMA/8000\r\n",
-    cVia, cFrom, cTo, cCallID, iLastCSeq,
-    pDialNr ? pDialNr : "esp32", localIP, localPort,
-    localIP, localIP, audioport
+    caRead,
+    pSipUser ? pSipUser : "esp32", pMyIp, iSipPort,
+    pMyIp, pMyIp
   );
+
+  udp.beginPacket(pSipIp, iSipPort);
+  udp.write((uint8_t*)response, strlen(response));
+  udp.endPacket();
+
+  Serial.println("DEBUG| Sent 200 OK for incoming call");
+  
+  iRingTime = Millis();
+  iMaxTime = 3 * 60 * 1000; // Таймаут разговора 3 минуты
+  incomingCall = false;
+}
 
   udp.beginPacket(sipServerIP, sipServerPort);
   udp.write((uint8_t*)response, strlen(response));
@@ -424,8 +435,7 @@ void Sip::HandleUdpPacket()
   {
     Serial.println("DEBUG| Incoming SIP INVITE received");
     incomingCall = true;
-    ParseReturnParams(p);
-    SendRinging(p); // Метод отправки 180 Ringing
+    ParseReturnParams(p); // Сохраняет Via, From, To, Call-ID в caRead
   }
 
   else if (strstr(p, "BYE") == p)
