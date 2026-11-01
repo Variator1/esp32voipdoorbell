@@ -386,6 +386,9 @@ void Sip::HandleUdpPacket()
     packetSize = udp.read(caSipIn, sizeof(caSipIn));
     if (packetSize > 0) {
       caSipIn[packetSize] = 0;
+      // ---> ДОБАВЬТЕ ЭТОТ ЛОГ:
+      Serial.println("DEBUG_SIP_RAW| Received UDP packet:");
+      Serial.println(caSipIn);
     }
   }
   if (packetSize > 0) {
@@ -425,6 +428,9 @@ void Sip::HandleUdpPacket()
     Serial.println("DEBUG| Incoming SIP INVITE received");
     incomingCall = true;
     ParseReturnParams(p); // Сохраняет Via, From, To, Call-ID в caRead
+
+    Serial.print("DEBUG| Parsed Return Params (caRead): ");
+    Serial.println(caRead);
   }
 
   else if (strstr(p, "BYE") == p)

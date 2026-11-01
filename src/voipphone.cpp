@@ -84,6 +84,14 @@ void VOIPPhone::loop() {
   // 1. Обрабатываем SIP-стек (прием пакетов, пинг)
   handleSIP();
 
+  // Добавим разовую или периодическую проверку флага incomingCall
+  static bool lastIncomingState = false;
+  bool currentIncoming = sip != NULL ? sip->isIncomingCall() : false;
+  if (currentIncoming != lastIncomingState) {
+    Serial.printf("DEBUG_VOIP| Incoming call state changed: %s\n", currentIncoming ? "TRUE" : "FALSE");
+    lastIncomingState = currentIncoming;
+  }
+
   // 2. Проверяем состояние вызова (автоматически запускает/останавливает таймер RTP)
   handleOutgoingRTP();
 
