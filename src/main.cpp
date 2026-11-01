@@ -145,7 +145,7 @@ void setup() {
   configManager.addParameter("echocompensation", &config.echocompensation);
   configManager.addParameter("echodamping", &config.echodamping);
   configManager.addParameter("echothreshold", &config.echothreshold);
-  configManager.addParameter("version", &meta.version, get);
+  
   
   Serial.println("LOG: [SETUP] Установка колбэков ConfigManager...");
   configManager.setAPCallback(APCallback);
