@@ -69,11 +69,20 @@ void VOIPPhone::answerIncomingCall() {
   }
 }
 
-void VOIPPhone::bye() {
+void VOIPPhone::AnswerIncomingCall() {
+  answerIncomingCall(); 
+}
+
+void VOIPPhone::Bye(int cseq) {
   if (sip != NULL) {
     DebugPrintln("Sending BYE");
-    sip->Bye(0);
+    int seq = (cseq != -1) ? cseq : sip->iLastCSeq;
+    sip->Bye(seq);
   }
+}
+
+void VOIPPhone::bye() {
+  Bye(-1);
 }
 
 //
@@ -373,35 +382,3 @@ void VOIPPhone::setEchoCompensation(bool enable, long threshold_level, uint8_t d
   echodamping_value = damping;
 }
 
-bool VOIPPhone::isIncomingCall() {
-  if (sip != NULL) {
-    return sip->isIncomingCall();
-  }
-  return false;
-}
-
-void VOIPPhone::answerIncomingCall() {
-  if (sip != NULL) {
-    DebugPrintln("Answering incoming call");
-    i2s_start(I2S_PORT1);
-    rx_streamisrunning = true;
-    sip->AnswerIncomingCall();
-    DebugPrintln("sip->AnswerIncomingCall executed");
-  }
-}
-
-void VOIPPhone::AnswerIncomingCall() {
-  answerIncomingCall(); // Дублиршаем с большой буквы для совместимости
-}
-
-void VOIPPhone::Bye(int cseq) {
-  if (sip != NULL) {
-    DebugPrintln("Sending BYE");
-    int seq = (cseq != -1) ? cseq : sip->iLastCSeq;
-    sip->Bye(seq);
-  }
-}
-
-void VOIPPhone::bye() {
-  Bye(-1);
-}
