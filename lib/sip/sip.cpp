@@ -119,7 +119,7 @@ void Sip::AnswerIncomingCall() {
 }
 
 
-} // <--- Вот здесь заканчивается метод AnswerIncomingCall()
+ // <--- Вот здесь заканчивается метод AnswerIncomingCall()
 
 void Sip::Cancel(int cseq)
 {
