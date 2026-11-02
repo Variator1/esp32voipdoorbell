@@ -224,7 +224,7 @@ void loop() {
           } 
           else {
               Serial.println("LOG: [BUTTON] Button1 pressed. Hanging up...");
-              doorphone.Bye(iLastCSeq);
+              doorphone.Bye(); // Или передавайте через метод обертки
               isbusy = false;
           }
       } 

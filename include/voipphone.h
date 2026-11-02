@@ -21,41 +21,43 @@ extern bool DEBUG_MODE;
 #define SAMPLE_T            int32_t
 #define MIC_CONVERT(s)      ((s >> (SAMPLE_BITS - MIC_BITS))/2048) //result 13bit
 #define DAC_CONVERT(s)      ((s >> (SAMPLE_BITS - MIC_BITS))/65536) //result 8bit
-#define VOIPPHONE_OK                1
+#define VOIPPHONE_OK                    1
 #define VOIPPHONE_ERROR_RTPSOCKET       -1
 #define VOIPPHONE_ERROR_AMP_I2S_DRIVER  -2
 #define VOIPPHONE_ERROR_AMP_PIN         -3
 #define VOIPPHONE_ERROR_MIC_I2S_DRIVER  -4
 #define VOIPPHONE_ERROR_MIC_PIN         -5
-#define VOIPPHONE_ERROR_AMP_I2S_DRIVER  -2
-
 
 class VOIPPhone {
   public:
     VOIPPhone();
-    int begin(const char *sipip,const char *sipuser,const char *sippasswd);
-    void dial(const char *number,const char *id);
+    int begin(const char *sipip, const char *sipuser, const char *sippasswd);
+    void dial(const char *number, const char *id);
     void loop(void);
     void setMicGain(uint8_t gain);
     void setAmpGain(uint8_t gain);
     bool isBusy(void);
     void setEchoCompensation(bool enable, long threshold_level, uint8_t damping);
-    bool isIncomingCall();
-    void answerIncomingCall();
-    void bye();
     
-    private:
+    // Методы для работы с входящим звонком и сбросом
+    bool isIncomingCall();
+    void AnswerIncomingCall();
+    void answerIncomingCall(); // Алиас для совместимости с маленькой буквы
+    void Bye(int cseq = -1);    // Перегрузка с опциональным аргументом
+    void bye();                // Алиас для сброса без аргументов
+
+  private:
     int initi2samp(void);
     int initi2smic(void);
-    static esp_err_t readFromMic(void *dest,size_t size,size_t *bytes_read);
-    esp_err_t writeToAmp(const void *src,size_t size, size_t *bytes_written);
+    static esp_err_t readFromMic(void *dest, size_t size, size_t *bytes_read);
+    esp_err_t writeToAmp(const void *src, size_t size, size_t *bytes_written);
     static void tx_rtp(void);
     void handleIncommingRTP(void);
     void handleOutgoingRTP(void);
     void handleSIP(void);
 
-    static const i2s_port_t I2S_PORT0 = I2S_NUM_0; //mems
-    const i2s_port_t I2S_PORT1 = I2S_NUM_1; //amplifier
+    static const i2s_port_t I2S_PORT0 = I2S_NUM_0; // mems
+    const i2s_port_t I2S_PORT1 = I2S_NUM_1;        // amplifier
 
     static WiFiUDP rtpudp;
    
@@ -75,11 +77,8 @@ class VOIPPhone {
     int rtppkgsize = -1;
     size_t packetSize;
     // sip params
-    int sipport = 5060;          // Port so lassen
+    int sipport = 5060;
     char myip[18];
-    //char sipip_cstr[18];
 };
-
-
 
 #endif

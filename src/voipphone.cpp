@@ -372,3 +372,27 @@ void VOIPPhone::setEchoCompensation(bool enable, long threshold_level, uint8_t d
   ec_threshold_level = threshold_level;
   echodamping_value = damping;
 }
+
+bool VOIPPhone::isIncomingCall() {
+    return sip ? sip->isIncomingCall() : false; // Проверьте, что в Sip есть метод или доступ к флаговой переменной
+}
+
+void VOIPPhone::AnswerIncomingCall() {
+    if (sip) sip->AnswerIncomingCall();
+}
+
+void VOIPPhone::answerIncomingCall() {
+    AnswerIncomingCall();
+}
+
+void VOIPPhone::Bye(int cseq) {
+    if (sip) {
+        // Если cseq не передан (-1), берем сохраненный iLastCSeq из объекта sip
+        int seq = (cseq != -1) ? cseq : sip->iLastCSeq; 
+        sip->Bye(seq);
+    }
+}
+
+void VOIPPhone::bye() {
+    Bye(-1);
+}
