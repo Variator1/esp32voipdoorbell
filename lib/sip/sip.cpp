@@ -77,15 +77,17 @@ bool Sip::Dial(const char *DialNr, const char *DialDesc, int MaxDialSec)
 }
 
 void Sip::AnswerIncomingCall() {
-  if (!incomingCall) return;
+  if (!incomingCall) {
+    Serial.println("DEBUG| Error: AnswerIncomingCall called but incomingCall is false!");
+    return;
+  }
 
   char response[1024];
   
-  // Формируем ответ 200 OK, используя уже сохраненные в caRead параметры (Call-ID, From, Via, To)
-  // и известные переменные pSipIp, pMyIp, iSipPort
+  // Формируем ответ 200 OK
   snprintf(response, sizeof(response),
     "SIP/2.0 200 OK\r\n"
-    "%s" // Здесь подставятся Via, From, To, Call-ID из caRead
+    "%s" // Заголовки Via, From, To, Call-ID, сохраненные из входящего INVITE
     "CSeq: 1 INVITE\r\n"
     "Contact: <sip:%s@%s:%d>\r\n"
     "Content-Type: application/sdp\r\n"
@@ -102,15 +104,21 @@ void Sip::AnswerIncomingCall() {
     pMyIp, pMyIp
   );
 
+  Serial.println("DEBUG| Sending 200 OK response payload:");
+  Serial.println(response);
+
   udp.beginPacket(pSipIp, iSipPort);
-  udp.write((uint8_t*)response, strlen(response));
+  size_t written = udp.write((uint8_t*)response, strlen(response));
   udp.endPacket();
 
-  Serial.println("DEBUG| Sent 200 OK for incoming call");
+  Serial.printf("DEBUG| Sent 200 OK for incoming call, bytes written: %u to %s:%d\n", written, pSipIp, iSipPort);
   
   iRingTime = Millis();
   iMaxTime = 3 * 60 * 1000; // Таймаут разговора 3 минуты
   incomingCall = false;
+}
+
+
 } // <--- Вот здесь заканчивается метод AnswerIncomingCall()
 
 void Sip::Cancel(int cseq)
