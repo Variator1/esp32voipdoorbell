@@ -137,39 +137,41 @@ bool VOIPPhone::isBusy(void) {
 
 int VOIPPhone::initi2samp() {
   esp_err_t err;
-  // The I2S config as per the example
+  
   const i2s_config_t i2s_config = {
-      .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_TX), // Receive, not transfer
-      .sample_rate = SAMPLE_RATE,                         // 16KHz
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, // could only get it to work with 32bits
-      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, // although the SEL config should be left, it seems to transmit on right
+      .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_TX), // Режим передачи (Transmit) для динамика
+      .sample_rate = 8000,                        // Жестко фиксируем 8 кГц для VoIP
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, 
+      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, 
       .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
-      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,     // Interrupt level 1
-      .dma_buf_count = 16,                           // number of buffers
-      .dma_buf_len = 60,                    // 8 samples per buffer (minimum)
+      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,     
+      .dma_buf_count = 16,                           
+      .dma_buf_len = 64,                          // Округлили до степени 2 для стабильности буфера DMA
       .use_apll = false
   };
-  // The pin config as per the setup
+
   const i2s_pin_config_t pin_config = {
       .bck_io_num = 14,   // BCLK
       .ws_io_num = 12,    // LRC
-      .data_out_num = 27, // DOUT -> DIN
-      .data_in_num = -1   // not used
+      .data_out_num = 27, // DIN усилителя
+      .data_in_num = -1   // Не используется
   };
-  // Configuring the I2S driver and pins.
-  // This function must be called before any I2S driver read/write operations.
+
   DebugPrintln("Init i2s amp...");
   err = i2s_driver_install(I2S_PORT1, &i2s_config, 0, NULL);
   if (err != ESP_OK) {
     Serial.printf("Failed installing driver: %d\n", err);
     return VOIPPHONE_ERROR_AMP_I2S_DRIVER;
   }
+  
   err = i2s_set_pin(I2S_PORT1, &pin_config);
   if (err != ESP_OK) {
     Serial.printf("Failed setting pin: %d\n", err);
     return VOIPPHONE_ERROR_AMP_PIN;
   }
-  DebugPrintln("I2S driver installed.");
+  
+  i2s_zero_dma_buffer(I2S_PORT1); // Очищаем буфер DMA при инициализации
+  DebugPrintln("I2S amplifier initialized successfully.");
   return VOIPPHONE_OK;
 }
 
@@ -222,8 +224,15 @@ esp_err_t VOIPPhone::readFromMic(void *dest,size_t size,size_t *bytes_read) {
   return i2s_read(I2S_PORT0,dest,size,bytes_read,portMAX_DELAY); // no timeout
 }
 
-esp_err_t VOIPPhone::writeToAmp(const void *src,size_t size, size_t *bytes_written) {
-  return i2s_write(I2S_PORT1,src,size,bytes_written,portMAX_DELAY);
+esp_err_t VOIPPhone::writeToAmp(const void *src, size_t size, size_t *bytes_written) {
+  // Выводим порт и размер буфера перед отправкой
+  // Убедитесь, что здесь используется тот же порт, что и при инициализации (например, I2S_NUM_0)
+  esp_err_t err = i2s_write(I2S_PORT1, src, size, bytes_written, portMAX_DELAY);
+  
+  Serial.printf("AMP_WRITE: port=%d, requested=%u, written=%u, err=0x%X\n", 
+                I2S_PORT1, size, (bytes_written ? *bytes_written : 0), err);
+                
+  return err;
 }
 
 //
@@ -335,16 +344,17 @@ void VOIPPhone::handleIncommingRTP(void) {
   if (packetSize > 0 && rx_streamisrunning) {
     packetSize = rtpudp.read(rtpbuffer, sizeof(rtpbuffer));
     
-    // ИСПРАВЛЕНИЕ: передаем rtpbuffer и packetSize в десериализатор!
     rxRTPpkg = RTPPacket();
     rtppkgsize = rxRTPpkg.deserialize(rtpbuffer, packetSize);
     
-    // Проверяем, что полезная нагрузка (payload) успешно извлечена
+    // ЛОГ 1: Проверяем, десериализовался ли пакет
+    Serial.printf("RTP RX: packetSize=%d, rtppkgsize=%d, payload=%p\n", 
+                  packetSize, rtppkgsize, rxRTPpkg.getPayload());
+
     if (rxRTPpkg.getPayload() != NULL && rtppkgsize > 0) {
       for(int i = 0; i < rtppkgsize; i++) {
         buffer[i] = (ALaw_Decode((*(rxRTPpkg.getPayload() + i)))) * amp_gain;
         
-        // echocompensation. calculate level.
         if(echocompensation) {
           level = (level + abs(buffer[i])) / 2;
         }
@@ -356,8 +366,12 @@ void VOIPPhone::handleIncommingRTP(void) {
         echodamping = 1;
       }
       
-      size_t num_bytes_write;
+      size_t num_bytes_write = 0;
       writeToAmp(buffer, sizeof(int16_t) * rtppkgsize, &num_bytes_write);
+      
+      // ЛОГ 2: Проверяем, ушли ли данные в усилитель
+      Serial.printf("AMP WRITE: requested=%u bytes, written=%u bytes\n", 
+                    sizeof(int16_t) * rtppkgsize, num_bytes_write);
     }
   } else {
     rtpudp.flush();
