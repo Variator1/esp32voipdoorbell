@@ -324,6 +324,9 @@ void VOIPPhone::tx_rtp(){
 //
 // Handle Rx RTP packages Port 1234
 //
+//
+// Handle Rx RTP packages Port 1234
+//
 void VOIPPhone::handleIncommingRTP(void) {
   int16_t buffer[500];
   RTPPacket rxRTPpkg;
@@ -331,22 +334,31 @@ void VOIPPhone::handleIncommingRTP(void) {
   packetSize = rtpudp.parsePacket();
   if (packetSize > 0 && rx_streamisrunning) {
     packetSize = rtpudp.read(rtpbuffer, sizeof(rtpbuffer));
+    
+    // ИСПРАВЛЕНИЕ: передаем rtpbuffer и packetSize в десериализатор!
     rxRTPpkg = RTPPacket();
     rtppkgsize = rxRTPpkg.deserialize(rtpbuffer, packetSize);
-    for(int i=0;i<rtppkgsize;i++) {
-      buffer[i] = (ALaw_Decode((*(rxRTPpkg.getPayload()+i))))*amp_gain;
-      // echocompensation. calculate level.
-      if(echocompensation) {
-        level = (level + abs(buffer[i])) / 2;
+    
+    // Проверяем, что полезная нагрузка (payload) успешно извлечена
+    if (rxRTPpkg.getPayload() != NULL && rtppkgsize > 0) {
+      for(int i = 0; i < rtppkgsize; i++) {
+        buffer[i] = (ALaw_Decode((*(rxRTPpkg.getPayload() + i)))) * amp_gain;
+        
+        // echocompensation. calculate level.
+        if(echocompensation) {
+          level = (level + abs(buffer[i])) / 2;
+        }
       }
+      
+      if(echocompensation && (level > ec_threshold_level)) {
+        echodamping = echodamping_value;
+      } else {
+        echodamping = 1;
+      }
+      
+      size_t num_bytes_write;
+      writeToAmp(buffer, sizeof(int16_t) * rtppkgsize, &num_bytes_write);
     }
-    if(echocompensation && (level > ec_threshold_level)) {
-      echodamping = echodamping_value;
-    } else {
-      echodamping = 1;
-    }
-    size_t num_bytes_write;
-    writeToAmp(buffer,sizeof(int16_t)*rtppkgsize,&num_bytes_write);
   } else {
     rtpudp.flush();
   }
