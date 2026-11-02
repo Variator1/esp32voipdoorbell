@@ -442,7 +442,37 @@ void Sip::HandleUdpPacket()
     incomingCall = true;
     ParseReturnParams(p); // Сохраняет Via, From, To, Call-ID в caRead
 
-    iLastCSeq = GrepInteger(p, "\nCSeq: "); // <--- Записываем в уже существующую переменную
+    iLastCSeq = GrepInteger(p, "\nCSeq: ");
+    
+    // --- Добавляем парсинг m=audio из SDP входящего INVITE ---
+    char *sdpportptr = strstr(p, "m=audio ");
+    if (sdpportptr == NULL) {
+      sdpportptr = strstr(p, "m=audio\t");
+    }
+    
+    if (sdpportptr != NULL) {
+      Serial.println("DEBUG| m=audio line found in incoming INVITE");
+      sdpportptr += 8;
+      int i = 0;
+      while (*sdpportptr >= '0' && *sdpportptr <= '9' && i < 6) {
+        audioport[i] = *sdpportptr;
+        sdpportptr++;
+        i++;
+      }
+      audioport[i] = '\0';
+      
+      if (i > 0) {
+        Serial.println("DEBUG| Audio Port successfully parsed from INVITE: " + (String)(audioport));
+      } else {
+        Serial.println("DEBUG| Failed to parse audio port from INVITE");
+        audioport[0] = '\0';
+      }
+    } else {
+      Serial.println("DEBUG| m=audio line not found in incoming INVITE");
+      audioport[0] = '\0';
+    }
+    // ---------------------------------------------------------
+
     Serial.print("DEBUG| Parsed Return Params (caRead): ");
     Serial.println(caRead);
   }
