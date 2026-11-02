@@ -183,6 +183,11 @@ void Sip::Ok(const char *p)
   AddCopySipLine(p, "To: ");
   AddSipLine("Content-Length: 0");
   AddSipLine("");
+  
+  // Добавляем отладку для контроля отправки
+  Serial.println("DEBUG| Sending 200 OK for request:");
+  Serial.println(pbuf);
+
   SendUdp();
 }
 
@@ -448,6 +453,7 @@ void Sip::HandleUdpPacket()
     audioport[0] = '\0';
     Ok(p);
     iRingTime = 0;
+    incomingCall = false; // <--- Обязательно возвращаем флаг в false
   }
   else if (strstr(p, "SIP/2.0 200") == p)    // OK
   { 
