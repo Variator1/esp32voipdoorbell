@@ -32,7 +32,7 @@ class Sip
     uint32_t    iRingTime;
     uint32_t    iMaxTime;
     int         iDialRetries;
-    int         iLastCSeq;
+    
     void        AddSipLine(const char* constFormat , ... );
     bool        AddCopySipLine(const char *p, const char *psearch);   
     bool        ParseParameter(char *dest, int destlen, const char *name, const char *line, char cq = '\"');
@@ -50,6 +50,7 @@ class Sip
     void        MakeMd5Digest(char *pOutHex33, char *pIn);
 
   public:
+    int         iLastCSeq;
     Sip(char *pBuf, size_t lBuf);
     void        Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd);
     void        HandleUdpPacket();

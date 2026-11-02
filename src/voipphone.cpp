@@ -374,25 +374,34 @@ void VOIPPhone::setEchoCompensation(bool enable, long threshold_level, uint8_t d
 }
 
 bool VOIPPhone::isIncomingCall() {
-    return sip ? sip->isIncomingCall() : false; // Проверьте, что в Sip есть метод или доступ к флаговой переменной
-}
-
-void VOIPPhone::AnswerIncomingCall() {
-    if (sip) sip->AnswerIncomingCall();
+  if (sip != NULL) {
+    return sip->isIncomingCall();
+  }
+  return false;
 }
 
 void VOIPPhone::answerIncomingCall() {
-    AnswerIncomingCall();
+  if (sip != NULL) {
+    DebugPrintln("Answering incoming call");
+    i2s_start(I2S_PORT1);
+    rx_streamisrunning = true;
+    sip->AnswerIncomingCall();
+    DebugPrintln("sip->AnswerIncomingCall executed");
+  }
+}
+
+void VOIPPhone::AnswerIncomingCall() {
+  answerIncomingCall(); // Дублиршаем с большой буквы для совместимости
 }
 
 void VOIPPhone::Bye(int cseq) {
-    if (sip) {
-        // Если cseq не передан (-1), берем сохраненный iLastCSeq из объекта sip
-        int seq = (cseq != -1) ? cseq : sip->iLastCSeq; 
-        sip->Bye(seq);
-    }
+  if (sip != NULL) {
+    DebugPrintln("Sending BYE");
+    int seq = (cseq != -1) ? cseq : sip->iLastCSeq;
+    sip->Bye(seq);
+  }
 }
 
 void VOIPPhone::bye() {
-    Bye(-1);
+  Bye(-1);
 }
