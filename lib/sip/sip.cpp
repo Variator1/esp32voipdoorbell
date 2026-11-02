@@ -507,6 +507,15 @@ void Sip::HandleUdpPacket()
     iLastCSeq = GrepInteger(p, "\nCSeq: ");
     Ok(p);
   }
+else if (strstr(p, "CANCEL") == p)
+  {
+    Serial.println("DEBUG| SIP/CANCEL received");
+    audioport[0] = '\0';
+    Ok(p); // Отправляем 200 OK на CANCEL
+    incomingCall = false; // Сбрасываем флаг входящего звонка
+    iRingTime = 0;
+  }
+
 }
 
 const char * Sip::GetSIPServerIP(void) {
