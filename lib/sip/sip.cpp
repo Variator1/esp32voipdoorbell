@@ -86,8 +86,8 @@ void Sip::AnswerIncomingCall() {
   
   snprintf(response, sizeof(response),
     "SIP/2.0 200 OK\r\n"
-    "%s" 
-    "CSeq: %i INVITE\r\n" // <--- Используем iLastCSeq
+    "%s\r\n"             // <--- Добавили \r\n после caRead, чтобы гарантировать разделение заголовков
+    "CSeq: %i INVITE\r\n" 
     "Contact: <sip:%s@%s:%d>\r\n"
     "Content-Type: application/sdp\r\n"
     "Content-Length: 142\r\n\r\n"
@@ -99,7 +99,7 @@ void Sip::AnswerIncomingCall() {
     "m=audio 1234 RTP/AVP 8\r\n"
     "a=rtpmap:8 PCMA/8000\r\n",
     caRead,
-    iLastCSeq, // <--- Передаем переменную
+    iLastCSeq, 
     pSipUser ? pSipUser : "esp32", pMyIp, iSipPort,
     pMyIp, pMyIp
   );
