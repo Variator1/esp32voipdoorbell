@@ -86,7 +86,7 @@ void Sip::AnswerIncomingCall() {
   
   snprintf(response, sizeof(response),
     "SIP/2.0 200 OK\r\n"
-    "%s\r\n"             // <--- Добавили \r\n после caRead, чтобы гарантировать разделение заголовков
+    "%s\r\n"             // <--- Гарантируем разделение заголовков
     "CSeq: %i INVITE\r\n" 
     "Contact: <sip:%s@%s:%d>\r\n"
     "Content-Type: application/sdp\r\n"
@@ -96,12 +96,13 @@ void Sip::AnswerIncomingCall() {
     "s=ESP32 SIP Phone\r\n"
     "c=IN IP4 %s\r\n"
     "t=0 0\r\n"
-    "m=audio 1234 RTP/AVP 8\r\n"
+    "m=audio %s RTP/AVP 8\r\n"   // <--- 1. Заменили 1234 на %s
     "a=rtpmap:8 PCMA/8000\r\n",
     caRead,
     iLastCSeq, 
     pSipUser ? pSipUser : "esp32", pMyIp, iSipPort,
-    pMyIp, pMyIp
+    pMyIp, pMyIp,
+    audioport                    // <--- 2. Передали распарсенный порт в аргументы
   );
 
   Serial.println("DEBUG| Sending 200 OK response payload:");
