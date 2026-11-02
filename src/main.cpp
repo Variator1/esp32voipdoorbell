@@ -214,7 +214,7 @@ void loop() {
       if (button1.clicks == 1) {
           if (doorphone.isIncomingCall()) {
               Serial.println("LOG: [BUTTON] Button1 pressed. Answering incoming call...");
-              doorphone.answerIncomingCall();
+              doorphone.AnswerIncomingCall();
               isbusy = true;
           } 
           else if (!isbusy) {
@@ -224,7 +224,7 @@ void loop() {
           } 
           else {
               Serial.println("LOG: [BUTTON] Button1 pressed. Hanging up...");
-              doorphone.bye();
+              doorphone.Bye(iLastCSeq);
               isbusy = false;
           }
       } 
