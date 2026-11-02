@@ -84,11 +84,10 @@ void Sip::AnswerIncomingCall() {
 
   char response[1024];
   
-  // Формируем ответ 200 OK
   snprintf(response, sizeof(response),
     "SIP/2.0 200 OK\r\n"
-    "%s" // Заголовки Via, From, To, Call-ID, сохраненные из входящего INVITE
-    "CSeq: 1 INVITE\r\n"
+    "%s" 
+    "CSeq: %i INVITE\r\n" // <--- Используем iLastCSeq
     "Contact: <sip:%s@%s:%d>\r\n"
     "Content-Type: application/sdp\r\n"
     "Content-Length: 142\r\n\r\n"
@@ -100,6 +99,7 @@ void Sip::AnswerIncomingCall() {
     "m=audio 1234 RTP/AVP 8\r\n"
     "a=rtpmap:8 PCMA/8000\r\n",
     caRead,
+    iLastCSeq, // <--- Передаем переменную
     pSipUser ? pSipUser : "esp32", pMyIp, iSipPort,
     pMyIp, pMyIp
   );
@@ -114,7 +114,7 @@ void Sip::AnswerIncomingCall() {
   Serial.printf("DEBUG| Sent 200 OK for incoming call, bytes written: %u to %s:%d\n", written, pSipIp, iSipPort);
   
   iRingTime = Millis();
-  iMaxTime = 3 * 60 * 1000; // Таймаут разговора 3 минуты
+  iMaxTime = 3 * 60 * 1000; 
   incomingCall = false;
 }
 
@@ -437,6 +437,7 @@ void Sip::HandleUdpPacket()
     incomingCall = true;
     ParseReturnParams(p); // Сохраняет Via, From, To, Call-ID в caRead
 
+    iLastCSeq = GrepInteger(p, "\nCSeq: "); // <--- Записываем в уже существующую переменную
     Serial.print("DEBUG| Parsed Return Params (caRead): ");
     Serial.println(caRead);
   }
