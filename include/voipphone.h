@@ -57,7 +57,7 @@ class VOIPPhone {
     void handleSIP(void);
 
     static const i2s_port_t I2S_PORT0 = I2S_NUM_0; // mems
-    const i2s_port_t I2S_PORT1 = I2S_NUM_1;        // amplifier
+    const i2s_port_t I2S_PORT1 = I2S_NUM_0;        // amplifier
 
     static WiFiUDP rtpudp;
    

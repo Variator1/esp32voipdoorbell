@@ -157,21 +157,21 @@ int VOIPPhone::initi2samp() {
       .data_in_num = -1   // Не используется
   };
 
-  DebugPrintln("Init i2s amp...");
-  err = i2s_driver_install(I2S_PORT1, &i2s_config, 0, NULL);
+ DebugPrintln("Init i2s amp...");
+  err = i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
   if (err != ESP_OK) {
     Serial.printf("Failed installing driver: %d\n", err);
     return VOIPPHONE_ERROR_AMP_I2S_DRIVER;
   }
   
-  err = i2s_set_pin(I2S_PORT1, &pin_config);
+  err = i2s_set_pin(I2S_NUM_0, &pin_config);
   if (err != ESP_OK) {
     Serial.printf("Failed setting pin: %d\n", err);
     return VOIPPHONE_ERROR_AMP_PIN;
   }
   
-  i2s_zero_dma_buffer(I2S_PORT1); // Очищаем буфер DMA при инициализации
-  DebugPrintln("I2S amplifier initialized successfully.");
+  i2s_zero_dma_buffer(I2S_NUM_0); // Очищаем буфер DMA на порту 0
+  DebugPrintln("I2S amplifier initialized successfully on I2S_NUM_0.");
   return VOIPPHONE_OK;
 }
 
@@ -225,12 +225,11 @@ esp_err_t VOIPPhone::readFromMic(void *dest,size_t size,size_t *bytes_read) {
 }
 
 esp_err_t VOIPPhone::writeToAmp(const void *src, size_t size, size_t *bytes_written) {
-  // Выводим порт и размер буфера перед отправкой
-  // Убедитесь, что здесь используется тот же порт, что и при инициализации (например, I2S_NUM_0)
-  esp_err_t err = i2s_write(I2S_PORT1, src, size, bytes_written, portMAX_DELAY);
+  // Используем I2S_NUM_0, так как инициализация теперь на нем
+  esp_err_t err = i2s_write(I2S_NUM_0, src, size, bytes_written, portMAX_DELAY);
   
-  Serial.printf("AMP_WRITE: port=%d, requested=%u, written=%u, err=0x%X\n", 
-                I2S_PORT1, size, (bytes_written ? *bytes_written : 0), err);
+  Serial.printf("AMP_WRITE: port=0, requested=%u, written=%u, err=0x%X\n", 
+                size, (bytes_written ? *bytes_written : 0), err);
                 
   return err;
 }
