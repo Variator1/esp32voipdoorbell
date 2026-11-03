@@ -1,6 +1,8 @@
 #ifndef _VOIPPHONE_h_
 #define _VOIPPHONE_h_
 
+#define AMP_SD_PIN 22 // Свободный пин для управления Shutdown усилителя
+
 #include <Arduino.h>
 #include <driver/i2s.h>
 #include <Ticker.h>

@@ -1,6 +1,5 @@
 #include "voipphone.h"
 
-//bool DEBUG_MODE = false;
 Sip *VOIPPhone::sip = NULL;
 WiFiUDP VOIPPhone::rtpudp = WiFiUDP();
 uint8_t VOIPPhone::amp_gain = AMP_GAIN;
@@ -25,12 +24,8 @@ int VOIPPhone::begin(const char *sipip, const char *sipuser, const char *sippass
   sip->Init(sipip, sipport, myip, sipport, sipuser, sippasswd);
   DebugPrintln("[OK]");
   
-  // Инициализируем аудиоустройства
-  int result = initi2smic();
-  if (result != VOIPPHONE_OK) {
-    return result;
-  }
-  result = initi2samp();
+  // Единая инициализация аудио на I2S_NUM_0 (Full Duplex)
+  int result = initi2samp();
   if (result != VOIPPHONE_OK) {
     return result;
   }
@@ -120,86 +115,61 @@ bool VOIPPhone::isBusy(void) {
 }
 
 //
-// Initialize i2s amplifier (I2S_NUM_0)
+// Единая инициализация I2S Full Duplex (микрофон + усилитель на I2S_NUM_0)
 //
 
 int VOIPPhone::initi2samp() {
   esp_err_t err;
   
+  // Настраиваем пин SD (Shutdown) усилителя как выход и пока выключаем (LOW) для избежания щелчков
+  pinMode(AMP_SD_PIN, OUTPUT);
+  digitalWrite(AMP_SD_PIN, LOW);
+
   const i2s_config_t i2s_config = {
-      .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_TX),
-      .sample_rate = 8000,
+      .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX), // Прием и передача одновременно
+      .sample_rate = 8000, 
       .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, 
       .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, 
       .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,    
-      .dma_buf_count = 16,                          
+      .dma_buf_count = 8,                          
       .dma_buf_len = 64,                           
       .use_apll = false
   };
 
+  // Общие линии тактирования (14 и 12) и раздельные линии данных (динамик 27, микрофон 33)
   const i2s_pin_config_t pin_config = {
-      .bck_io_num = 14,
-      .ws_io_num = 12,
-      .data_out_num = 27,
-      .data_in_num = -1
+      .bck_io_num = 14,       // Общий BCLK
+      .ws_io_num = 12,        // Общий WS / LRC
+      .data_out_num = 27,     // DIN усилителя
+      .data_in_num = 33       // DOUT микрофона (INMP441)
   };
 
-  DebugPrintln("Init i2s amp...");
+  DebugPrintln("Init unified I2S Full Duplex on I2S_NUM_0...");
   err = i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
   if (err != ESP_OK) {
-    Serial.printf("Failed installing driver: %d\n", err);
+    Serial.printf("Failed installing I2S driver: %d\n", err);
     return VOIPPHONE_ERROR_AMP_I2S_DRIVER;
   }
   
   err = i2s_set_pin(I2S_NUM_0, &pin_config);
   if (err != ESP_OK) {
-    Serial.printf("Failed setting pin: %d\n", err);
+    Serial.printf("Failed setting I2S pins: %d\n", err);
     return VOIPPHONE_ERROR_AMP_PIN;
   }
   
   i2s_zero_dma_buffer(I2S_NUM_0);
-  DebugPrintln("I2S amplifier initialized successfully on I2S_NUM_0.");
+  
+  // Включаем усилитель через пин SD после успешной инициализации драйвера
+  digitalWrite(AMP_SD_PIN, HIGH);
+  
+  DebugPrintln("Unified I2S Full Duplex initialized successfully.");
   return VOIPPHONE_OK;
 }
 
-//
-// Initialize i2s microphone (I2S_NUM_0)
-//
-
+// Заглушка, чтобы старый код компилятора не ругался на отсутствие initi2smic
 int VOIPPhone::initi2smic() {
-  esp_err_t err;
-  const i2s_config_t i2s_config = {
-      .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_RX),
-      .sample_rate = SAMPLE_RATE,
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
-      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-      .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
-      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-      .dma_buf_count = 8,
-      .dma_buf_len = 64
-  };
-  
-  const i2s_pin_config_t pin_config = {
-      .bck_io_num = 26,
-      .ws_io_num = 25,
-      .data_out_num = -1,
-      .data_in_num = 33
-  };
-  
-  DebugPrintln("Init i2s mems...");
-  err = i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
-  if (err != ESP_OK) {
-    Serial.printf("Failed installing driver: %d\n", err);
-    return VOIPPHONE_ERROR_MIC_I2S_DRIVER;
-  }
-  err = i2s_set_pin(I2S_NUM_0, &pin_config);
-  if (err != ESP_OK) {
-    Serial.printf("Failed setting pin: %d\n", err);
-    return VOIPPHONE_ERROR_MIC_PIN;
-  }
-  DebugPrintln("I2S driver installed.");
-  return VOIPPHONE_OK;
+  return VOIPPHONE_OK; 
 }
 
 //
