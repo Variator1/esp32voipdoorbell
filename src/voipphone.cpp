@@ -228,8 +228,8 @@ esp_err_t VOIPPhone::writeToAmp(const void *src, size_t size, size_t *bytes_writ
   // Используем I2S_NUM_0, так как инициализация теперь на нем
   esp_err_t err = i2s_write(I2S_NUM_0, src, size, bytes_written, portMAX_DELAY);
   
-  Serial.printf("AMP_WRITE: port=0, requested=%u, written=%u, err=0x%X\n", 
-                size, (bytes_written ? *bytes_written : 0), err);
+  //Serial.printf("AMP_WRITE: port=0, requested=%u, written=%u, err=0x%X\n", 
+                //size, (bytes_written ? *bytes_written : 0), err);
                 
   return err;
 }
