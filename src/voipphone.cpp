@@ -208,16 +208,11 @@ void VOIPPhone::tx_rtp(){
       Serial.printf("DEBUG_RTP| Warning: RTP packet interval too long: %u ms\n", diff);
     }
   }
-  
-  if (last_send_time == 0) {
-    last_send_time = now;
-  } else {
-    last_send_time = now;
-  }
+  last_send_time = now;
 
-  uint8_t temp[160];
+  uint8_t temp[80];       // 80 сэмплов для 10 мс пакета
   size_t bytes_read = 0;
-  int32_t i2s_buffer[160]; 
+  int32_t i2s_buffer[80]; 
   
   static uint16_t sequenceNumber = 0;
   const uint32_t ssrc = 3124150;
@@ -226,36 +221,35 @@ void VOIPPhone::tx_rtp(){
   uint8_t packetBuffer[255];
 
   uint32_t t_start = micros();
-  esp_err_t result = readFromMic(i2s_buffer, sizeof(i2s_buffer), &bytes_read);
+  // Читаем порциями по 80 сэмплов с таймаутом 10 мс
+  esp_err_t result = i2s_read(I2S_NUM_0, i2s_buffer, sizeof(i2s_buffer), &bytes_read, pdMS_TO_TICKS(10));
   uint32_t t_elapsed = micros() - t_start;
 
-  if (t_elapsed > 15000) {
+  if (t_elapsed > 10000) {
     Serial.printf("DEBUG_MIC| Warning: Slow I2S read: %u us, bytes: %u\n", t_elapsed, bytes_read);
   }
 
   if (result == ESP_OK && bytes_read > 0) {
     int samples_read = bytes_read / sizeof(int32_t);
-    bool is_silent = true;
     
-    for(int i = 0; i < 160; i++) {
+    for(int i = 0; i < 80; i++) {
       int16_t sample = 0;
       if (i < samples_read) {
         int32_t raw_sample = i2s_buffer[i];
-        if (raw_sample != 0) is_silent = false;
         sample = (int16_t)(raw_sample >> 16); 
       }
       temp[i] = ALaw_Encode(sample);
     }
   } else {
-    Serial.printf("DEBUG_MIC| Error reading mic! err=0x%x, bytes=%u\n", result, bytes_read);
-    memset(temp, 0xD5, 160); 
+    // Если данные не успели накопиться — заполняем тишиной (A-law silence = 0xD5)
+    memset(temp, 0xD5, 80); 
   }
 
   if(sequenceNumber == 0) {
     timestamp = 0;
   }
   
-  txRTPpkg = RTPPacket(temp, sequenceNumber++, ssrc, timestamp += 160, 8, 160);
+  txRTPpkg = RTPPacket(temp, sequenceNumber++, ssrc, timestamp += 80, 8, 80);
   int length = txRTPpkg.serialize(packetBuffer);
   
   IPAddress tempip;
@@ -322,7 +316,7 @@ void VOIPPhone::handleOutgoingRTP(void) {
     tx_streamisrunning = true;
     DebugPrint("Starting stream...");
     i2s_start(I2S_NUM_0);
-    tx_streamticker.attach_ms(20, VOIPPhone::tx_rtp);
+    tx_streamticker.attach_ms(10, VOIPPhone::tx_rtp);
     DebugPrintln("[OK]");
   } else if( sip->audioport[0] == '\0' && tx_streamisrunning ) {
     tx_streamisrunning = false;
