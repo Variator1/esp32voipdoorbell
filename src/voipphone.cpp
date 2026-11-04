@@ -235,70 +235,67 @@ esp_err_t VOIPPhone::writeToAmp(const void *src, size_t size, size_t *bytes_writ
 // Send RTP packet every 20ms
 //
 void VOIPPhone::tx_rtp(){
-  static uint32_t last_send_time = 0;
-  uint32_t now = millis();
-  
-  if (last_send_time != 0) {
-    uint32_t diff = now - last_send_time;
-    if (diff > 10000) {
-      last_send_time = now;
-    } else if (diff > 35) {
-      Serial.printf("DEBUG_RTP| Warning: RTP packet interval too long: %u ms\n", diff);
-    }
-  }
-  
-  if (last_send_time == 0) {
-    last_send_time = now;
-  } else {
-    last_send_time = now;
-  }
-
-  uint8_t temp[160];
+  // Буфер на 320 сэмплов для 20 мс при 16 кГц
+  int16_t i2s_buffer[320]; 
   size_t bytes_read = 0;
-  int16_t i2s_buffer[160]; 
-  
-  static uint16_t sequenceNumber = 0;
-  const uint32_t ssrc = 3124150;
-  static uint32_t timestamp = 0;
-  RTPPacket txRTPpkg;
-  uint8_t packetBuffer[255];
 
+  // 1. Читаем с микрофона (запрос полного блока на 20мс)
   esp_err_t result = readFromMic(i2s_buffer, sizeof(i2s_buffer), &bytes_read);
 
+  // Массив под сжатый G.711 A-law (всегда 160 байт для 20мс при 8кГц)
+  uint8_t temp[160];
+  
   if (result == ESP_OK && bytes_read > 0) {
     int samples_read = bytes_read / sizeof(int16_t);
     
-    for(int i = 0; i < 160; i++) {
-      int16_t sample = 0;
-      if (i < samples_read) {
-        int32_t raw_sample = i2s_buffer[i];
-        // Буст микрофона через mic_gain
-        raw_sample = raw_sample * mic_gain;
-        if (raw_sample > 32767) raw_sample = 32767;
-        if (raw_sample < -32768) raw_sample = -32768;
-        sample = (int16_t)raw_sample;
-      }
-      temp[i] = ALaw_Encode(sample);
+    int dst_idx = 0;
+    // 2. ДАУНСЭМПЛИНГ 16кГц -> 8кГц: берем каждый 2-й отсчет, 
+    // чтобы сервер получил стандартные 160 сэмплов за 20 мс.
+    for(int i = 0; i < samples_read && dst_idx < 160; i += 2) {
+      int32_t raw_sample = i2s_buffer[i];
+      
+      // Буст микрофона через mic_gain
+      raw_sample = raw_sample * mic_gain;
+      if (raw_sample > 32767) raw_sample = 32767;
+      if (raw_sample < -32768) raw_sample = -32768;
+      
+      int16_t sample = (int16_t)raw_sample;
+      temp[dst_idx++] = ALaw_Encode(sample);
     }
+    
+    // Если прочиталось меньше, заполняем остаток тишиной (0xD5 в A-law)
+    while(dst_idx < 160) {
+      temp[dst_idx++] = 0xD5;
+    }
+    
   } else {
+    // Если микрофон не отдал данные — шлем тишину
     memset(temp, 0xD5, 160); 
   }
 
-  if(sequenceNumber == 0) {
-    timestamp = 0;
-  }
+  static uint16_t sequenceNumber = 0;
+  const uint32_t ssrc = 3124150;
+  static uint32_t timestamp = 0;
   
-  txRTPpkg = RTPPacket(temp, sequenceNumber++, ssrc, timestamp += 160, 8, 160);
+  RTPPacket txRTPpkg(temp, sequenceNumber++, ssrc, timestamp, 8, 160);
+  timestamp += 160; // Увеличиваем на фиксированное число сэмплов для 8 кГц
+
+  uint8_t packetBuffer[255];
   int length = txRTPpkg.serialize(packetBuffer);
   
+  // 3. Отправка пакета на SIP-сервер
   IPAddress tempip;
   tempip.fromString(sip->GetSIPServerIP()); 
-  int beginOK = rtpudp.beginPacket(tempip, atoi(sip->audioport));
-  if (beginOK != 0) {
-    rtpudp.write(packetBuffer, length);
-    rtpudp.endPacket();
-  } else {
-    Serial.println("DEBUG_NET| Error: rtpudp.beginPacket failed!");
+  int remote_port = atoi(sip->audioport);
+  
+  if (remote_port > 0) {
+    int beginOK = rtpudp.beginPacket(tempip, remote_port);
+    if (beginOK != 0) {
+      rtpudp.write(packetBuffer, length);
+      rtpudp.endPacket();
+    } else {
+      Serial.println("DEBUG_NET| Error: rtpudp.beginPacket failed!");
+    }
   }
 }
 
