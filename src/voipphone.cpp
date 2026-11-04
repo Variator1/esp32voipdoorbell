@@ -231,7 +231,15 @@ void VOIPPhone::tx_rtp(){
     
     for (int i = 0; i < samples_read && dst_idx < 160; i += 2) {
       int32_t raw_sample = i2s_buffer[i];
-      int16_t sample = (int16_t)(raw_sample >> 16); 
+      
+      // Сдвигаем на 14 бит для корректного преобразования 24-бит INMP441 в int16_t
+      int16_t sample = (int16_t)(raw_sample >> 14); 
+      
+      // Отладочный вывод (срабатывает раз в секунду, чтобы не забивать лог)
+      static int log_cnt = 0;
+      if (++log_cnt % 50 == 0) {
+          Serial.printf("DEBUG_MIC| raw: %d, sample: %d\n", (int)raw_sample, (int)sample);
+      }
       
       int32_t amplified = sample * mic_gain;
       if (amplified > 32767) amplified = 32767;

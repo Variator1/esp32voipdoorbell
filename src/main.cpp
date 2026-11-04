@@ -261,8 +261,8 @@ void loop() {
   // Отладочный вывод каждую секунду (чтобы не заспамить порт)
   static unsigned long lastDebug = 0;
   if (millis() - lastDebug > 1000) {
-    Serial.printf("LOG: [LOOP] WiFi status: %d, sip_ip: %s, doorrunning: %d\n", 
-                  WiFi.status(), config.sip_ip, doorphonerunning);
+    //Serial.printf("LOG: [LOOP] WiFi status: %d, sip_ip: %s, doorrunning: %d\n", 
+                  //WiFi.status(), config.sip_ip, doorphonerunning);
     lastDebug = millis();
   }
 
