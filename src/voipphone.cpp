@@ -24,7 +24,6 @@ int VOIPPhone::begin(const char *sipip, const char *sipuser, const char *sippass
   sip->Init(sipip, sipport, myip, sipport, sipuser, sippasswd);
   DebugPrintln("[OK]");
   
-  // Инициализация двух независимых I2S портов
   int result = initi2smic();
   if (result != VOIPPHONE_OK) return result;
 
@@ -33,10 +32,6 @@ int VOIPPhone::begin(const char *sipip, const char *sipuser, const char *sippass
 
   return VOIPPHONE_OK;
 }
-
-//
-// Dialing
-//
 
 void VOIPPhone::dial(const char *number, const char *id) {
   DebugPrintln("Dialing");
@@ -82,10 +77,6 @@ void VOIPPhone::bye() {
   Bye(-1);
 }
 
-//
-// Loop
-//
-
 void VOIPPhone::loop() {
   handleSIP();
 
@@ -118,10 +109,6 @@ bool VOIPPhone::isBusy(void) {
   return sip->IsBusy();
 }
 
-//
-// Инициализация микрофона INMP441 на I2S_NUM_0 (16 кГц)
-//
-
 int VOIPPhone::initi2smic() {
   esp_err_t err;
 
@@ -138,12 +125,10 @@ int VOIPPhone::initi2smic() {
     .dma_buf_count = 4,
     .dma_buf_len = 128,
     .use_apll = false,
-    .tx_desc_auto_clear = false,
-    .fixed_mclk = 0
+    .tx_desc_auto_clear = false
   };
 
   const i2s_pin_config_t mic_pins = {
-    .mck_io_num = I2S_PIN_NO_CHANGE,
     .bck_io_num = MIC_BCLK,
     .ws_io_num = MIC_WS,
     .data_out_num = I2S_PIN_NO_CHANGE,
@@ -168,10 +153,6 @@ int VOIPPhone::initi2smic() {
   return VOIPPHONE_OK;
 }
 
-//
-// Инициализация усилителя MAX98357A на I2S_NUM_1 (16 кГц)
-//
-
 int VOIPPhone::initi2samp() {
   esp_err_t err;
   
@@ -188,12 +169,10 @@ int VOIPPhone::initi2samp() {
     .dma_buf_count = 4,
     .dma_buf_len = 128,
     .use_apll = false,
-    .tx_desc_auto_clear = true,
-    .fixed_mclk = 0
+    .tx_desc_auto_clear = true
   };
 
   const i2s_pin_config_t amp_pins = {
-    .mck_io_num = I2S_PIN_NO_CHANGE,
     .bck_io_num = AMP_BCLK,
     .ws_io_num = AMP_LRC,
     .data_out_num = AMP_DOUT,
@@ -221,17 +200,9 @@ int VOIPPhone::initi2samp() {
   return VOIPPHONE_OK;
 }
 
-//
-// Read from microphone (I2S_NUM_0)
-//
-
 esp_err_t VOIPPhone::readFromMic(void *dest, size_t size, size_t *bytes_read) {
   return i2s_read(I2S_NUM_0, dest, size, bytes_read, 0);
 }
-
-//
-// Write to amplifier (I2S_NUM_1)
-//
 
 esp_err_t VOIPPhone::writeToAmp(const void *src, size_t size, size_t *bytes_written) {
   if (src == nullptr || size == 0) {
@@ -240,10 +211,6 @@ esp_err_t VOIPPhone::writeToAmp(const void *src, size_t size, size_t *bytes_writ
   }
   return i2s_write(I2S_NUM_1, src, size, bytes_written, 0);
 }
-
-//
-// Send RTP packet (16kHz -> downsample to 8kHz)
-//
 
 void VOIPPhone::tx_rtp(){
   int32_t i2s_buffer[320]; 
@@ -296,10 +263,6 @@ void VOIPPhone::tx_rtp(){
   }
 }
 
-//
-// Handle Rx RTP packages Port 1234 (8kHz -> upsample to 16kHz for I2S_NUM_1)
-//
-
 void VOIPPhone::handleIncommingRTP(void) {
   int16_t decoded_8khz[250];      
   int16_t upsampled_16khz[500];   
@@ -312,7 +275,7 @@ void VOIPPhone::handleIncommingRTP(void) {
     rxRTPpkg = RTPPacket();
     rtppkgsize = rxRTPpkg.deserialize(rtpbuffer, packetSize);
     
-    uint8_t *payload = rxRTPpkg.getPayload();
+    const uint8_t *payload = rxRTPpkg.getPayload(); // Исправлен тип на const
 
     if (payload != NULL && rtppkgsize > 0 && rtppkgsize <= 250) {
       int dst_idx = 0;
@@ -345,10 +308,6 @@ void VOIPPhone::handleIncommingRTP(void) {
     rtpudp.flush();
   }
 }
-
-//
-// Handle Outgoing RTP stream
-//
 
 void VOIPPhone::handleOutgoingRTP(void) {
   if( sip->audioport[0] != '\0' && !tx_streamisrunning ) {
