@@ -13,24 +13,14 @@ extern bool DEBUG_MODE;
 #define DebugPrintln(a) (DEBUG_MODE ? Serial.println(a) : false)
 #define DebugPrint(a) (DEBUG_MODE ? Serial.print(a) : false)
 
-// --- Настройки для МИКРОФОНА INMP441 (I2S_NUM_0) ---
-#define MIC_BCLK    14
-#define MIC_WS      15
-#define MIC_DIN     32
-#define MIC_LR_PIN  23 
-
-// --- Настройки для УСИЛИТЕЛЯ MAX98357A (I2S_NUM_1) ---
-#define AMP_BCLK    4
-#define AMP_LRC     5
-#define AMP_DOUT    18
-#define AMP_SD_PIN  19 
-
-#define MIC_BITS            24 
+#define MIC_BITS            24 // valid number of bits in I2S data
 #define MIC_GAIN            2
 #define AMP_GAIN            6
 #define SAMPLE_RATE         8000 // Hz 
-#define SAMPLE_BITS         32   
+#define SAMPLE_BITS         32    // bits
 #define SAMPLE_T            int32_t
+#define MIC_CONVERT(s)      ((s >> (SAMPLE_BITS - MIC_BITS))/2048) //result 13bit
+#define DAC_CONVERT(s)      ((s >> (SAMPLE_BITS - MIC_BITS))/65536) //result 8bit
 #define VOIPPHONE_OK                    1
 #define VOIPPHONE_ERROR_RTPSOCKET       -1
 #define VOIPPHONE_ERROR_AMP_I2S_DRIVER  -2
@@ -49,11 +39,12 @@ class VOIPPhone {
     bool isBusy(void);
     void setEchoCompensation(bool enable, long threshold_level, uint8_t damping);
     
+    // Методы для работы с входящим звонком и сбросом
     bool isIncomingCall();
     void AnswerIncomingCall();
-    void answerIncomingCall(); 
-    void Bye(int cseq = -1);    
-    void bye();               
+    void answerIncomingCall(); // Алиас для совместимости с маленькой буквы
+    void Bye(int cseq = -1);    // Перегрузка с опциональным аргументом
+    void bye();                // Алиас для сброса без аргументов
 
   private:
     int initi2samp(void);
@@ -64,6 +55,9 @@ class VOIPPhone {
     void handleIncommingRTP(void);
     void handleOutgoingRTP(void);
     void handleSIP(void);
+
+    static const i2s_port_t I2S_PORT0 = I2S_NUM_0; // mems
+    const i2s_port_t I2S_PORT1 = I2S_NUM_1;        // amplifier
 
     static WiFiUDP rtpudp;
    
@@ -82,6 +76,7 @@ class VOIPPhone {
     bool rx_streamisrunning = false;
     int rtppkgsize = -1;
     size_t packetSize;
+    // sip params
     int sipport = 5060;
     char myip[18];
 };
