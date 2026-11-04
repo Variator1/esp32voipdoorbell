@@ -13,20 +13,30 @@ extern bool DEBUG_MODE;
 #define DebugPrintln(a) (DEBUG_MODE ? Serial.println(a) : false)
 #define DebugPrint(a) (DEBUG_MODE ? Serial.print(a) : false)
 
-#define MIC_BITS            24 // valid number of bits in I2S data
+// --- НАСТРОЙКИ ПИНОВ И ЧАСТОТЫ (вынесены для удобства) ---
+#define SAMPLE_RATE         16000 // Ставим 16 кГц для стабильности I2S (как в рабочем тесте)
+
+// Пины микрофона INMP441
+#define MIC_BCLK_PIN        14
+#define MIC_WS_PIN          15
+#define MIC_DIN_PIN         32
+#define MIC_LR_PIN          23 // LOW = Left channel
+
+// Пины усилителя MAX98357A
+#define AMP_BCLK_PIN        4
+#define AMP_LRC_PIN         5
+#define AMP_DOUT_PIN        18
+#define AMP_SD_PIN          19 // HIGH = Normal operation (not shutdown)
+
 #define MIC_GAIN            2
 #define AMP_GAIN            6
-#define SAMPLE_RATE         8000 // Hz 
-#define SAMPLE_BITS         32    // bits
-#define SAMPLE_T            int32_t
-#define MIC_CONVERT(s)      ((s >> (SAMPLE_BITS - MIC_BITS))/2048) //result 13bit
-#define DAC_CONVERT(s)      ((s >> (SAMPLE_BITS - MIC_BITS))/65536) //result 8bit
-#define VOIPPHONE_OK                    1
-#define VOIPPHONE_ERROR_RTPSOCKET       -1
-#define VOIPPHONE_ERROR_AMP_I2S_DRIVER  -2
-#define VOIPPHONE_ERROR_AMP_PIN         -3
-#define VOIPPHONE_ERROR_MIC_I2S_DRIVER  -4
-#define VOIPPHONE_ERROR_MIC_PIN         -5
+
+#define VOIPPHONE_OK                1
+#define VOIPPHONE_ERROR_RTPSOCKET      -1
+#define VOIPPHONE_ERROR_AMP_I2S_DRIVER -2
+#define VOIPPHONE_ERROR_AMP_PIN        -3
+#define VOIPPHONE_ERROR_MIC_I2S_DRIVER -4
+#define VOIPPHONE_ERROR_MIC_PIN        -5
 
 class VOIPPhone {
   public:
@@ -39,12 +49,11 @@ class VOIPPhone {
     bool isBusy(void);
     void setEchoCompensation(bool enable, long threshold_level, uint8_t damping);
     
-    // Методы для работы с входящим звонком и сбросом
     bool isIncomingCall();
     void AnswerIncomingCall();
-    void answerIncomingCall(); // Алиас для совместимости с маленькой буквы
-    void Bye(int cseq = -1);    // Перегрузка с опциональным аргументом
-    void bye();                // Алиас для сброса без аргументов
+    void answerIncomingCall(); 
+    void Bye(int cseq = -1);    
+    void bye();               
 
   private:
     int initi2samp(void);
@@ -76,6 +85,7 @@ class VOIPPhone {
     bool rx_streamisrunning = false;
     int rtppkgsize = -1;
     size_t packetSize;
+    
     // sip params
     int sipport = 5060;
     char myip[18];

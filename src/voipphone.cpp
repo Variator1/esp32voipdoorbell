@@ -1,4 +1,4 @@
-#include"voipphone.h"
+#include "voipphone.h"
 
 //bool DEBUG_MODE = false;
 Sip *VOIPPhone::sip = NULL;
@@ -12,9 +12,8 @@ VOIPPhone::VOIPPhone() {
   
 }
 
-int VOIPPhone::begin(const char *sipip,const char *sipuser,const char *sippasswd) {
-  
-  strcpy(myip,WiFi.localIP().toString().c_str());
+int VOIPPhone::begin(const char *sipip, const char *sipuser, const char *sippasswd) {
+  strcpy(myip, WiFi.localIP().toString().c_str());
   int connOK = rtpudp.begin(1234);
   if (connOK == 0) {
     DebugPrintln("rtpudp (port:1234) could not get socket");
@@ -24,15 +23,16 @@ int VOIPPhone::begin(const char *sipip,const char *sipuser,const char *sippasswd
   }
   DebugPrint("Init SIP...");
   sip = new Sip(caSipOut, sizeof(caSipOut));
-  sip->Init(sipip, sipport , myip, sipport, sipuser, sippasswd); // 15 seconds
+  sip->Init(sipip, sipport, myip, sipport, sipuser, sippasswd);
   DebugPrintln("[OK]");
-  // i2s devices
+  
+  // i2s devices initialization
   int result = initi2smic();
-  if(result!=VOIPPHONE_OK) {
+  if(result != VOIPPHONE_OK) {
     return result;
   }
   result = initi2samp();
-  if(result!=VOIPPHONE_OK) {
+  if(result != VOIPPHONE_OK) {
     return result;
   }
   return VOIPPHONE_OK;
@@ -42,7 +42,7 @@ int VOIPPhone::begin(const char *sipip,const char *sipuser,const char *sippasswd
 // Dialing
 //
 
-void VOIPPhone::dial(const char *number,const char *id) {
+void VOIPPhone::dial(const char *number, const char *id) {
   DebugPrintln("Dialing");
   i2s_start(I2S_PORT1);
   DebugPrintln("I2SPORT1 start");
@@ -51,7 +51,6 @@ void VOIPPhone::dial(const char *number,const char *id) {
   DebugPrintln("sip->Dial executed");
 }
 
-// === ДОБАВЛЯЕМ НАШИ ОБЕРТКИ ЗДЕСЬ ===
 bool VOIPPhone::isIncomingCall() {
   if (sip != NULL) {
     return sip->isIncomingCall();
@@ -90,10 +89,8 @@ void VOIPPhone::bye() {
 //
 
 void VOIPPhone::loop() {
-  // 1. Обрабатываем SIP-стек (прием пакетов, пинг)
   handleSIP();
 
-  // Добавим разовую или периодическую проверку флага incomingCall
   static bool lastIncomingState = false;
   bool currentIncoming = sip != NULL ? sip->isIncomingCall() : false;
   if (currentIncoming != lastIncomingState) {
@@ -101,22 +98,15 @@ void VOIPPhone::loop() {
     lastIncomingState = currentIncoming;
   }
 
-  // 2. Проверяем состояние вызова (автоматически запускает/останавливает таймер RTP)
   handleOutgoingRTP();
-
-  // 3. Принимаем входящий звук с динамика
   handleIncommingRTP();
 }
 
-//
-// Handle SIP protocol loop
-//
 void VOIPPhone::handleSIP() {
   if (sip != NULL) {
-    sip->HandleUdpPacket(); // Опрашиваем входящие SIP-пакеты
+    sip->HandleUdpPacket();
   }
 }
-
 
 void VOIPPhone::setMicGain(uint8_t gain) {
   mic_gain = gain;
@@ -130,87 +120,100 @@ bool VOIPPhone::isBusy(void) {
   return sip->IsBusy();
 }
 
-
 //
-// Initialize i2s amplifier
+// Initialize i2s amplifier (MAX98357A на I2S_PORT1)
 //
 
 int VOIPPhone::initi2samp() {
   esp_err_t err;
-  // The I2S config as per the example
+
+  // Инициализация пина SD (Shutdown/Mode) для MAX98357A (например, пин 19)
+  pinMode(19, OUTPUT);
+  digitalWrite(19, HIGH); // Включаем усилитель
+
   const i2s_config_t i2s_config = {
-      .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_TX), // Receive, not transfer
-      .sample_rate = SAMPLE_RATE,                         // 16KHz
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, // could only get it to work with 32bits
-      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, // although the SEL config should be left, it seems to transmit on right
-      .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
-      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,     // Interrupt level 1
-      .dma_buf_count = 16,                           // number of buffers
-      .dma_buf_len = 60,                    // 8 samples per buffer (minimum)
-      .use_apll = false
+      .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
+      .sample_rate = SAMPLE_RATE,                    // 16000 Гц (железо работает на 16 кГц)
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,  // 16 бит
+      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, 
+      .communication_format = I2S_COMM_FORMAT_STAND_I2S, // Стандартный I2S формат
+      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+      .dma_buf_count = 8,
+      .dma_buf_len = 64,
+      .use_apll = false,
+      .tx_desc_auto_clear = true,                    // Предотвращает треск при паузах
+      .fixed_mclk = 0
   };
-  // The pin config as per the setup
+
   const i2s_pin_config_t pin_config = {
-      .bck_io_num = 4,   // BCLK
-      .ws_io_num = 5,    // LRC
-      .data_out_num = 18, // DOUT -> DIN
-      .data_in_num = -1   // not used
+      .mck_io_num = I2S_PIN_NO_CHANGE,
+      .bck_io_num = 4,        // BCLK
+      .ws_io_num = 5,         // LRC
+      .data_out_num = 18,     // DOUT -> DIN
+      .data_in_num = -1       // не используется
   };
-  // Configuring the I2S driver and pins.
-  // This function must be called before any I2S driver read/write operations.
+
   DebugPrintln("Init i2s amp...");
   err = i2s_driver_install(I2S_PORT1, &i2s_config, 0, NULL);
   if (err != ESP_OK) {
-    Serial.printf("Failed installing driver: %d\n", err);
+    Serial.printf("Failed installing amp driver: %d\n", err);
     return VOIPPHONE_ERROR_AMP_I2S_DRIVER;
   }
   err = i2s_set_pin(I2S_PORT1, &pin_config);
   if (err != ESP_OK) {
-    Serial.printf("Failed setting pin: %d\n", err);
+    Serial.printf("Failed setting amp pin: %d\n", err);
     return VOIPPHONE_ERROR_AMP_PIN;
   }
-  DebugPrintln("I2S driver installed.");
+  i2s_zero_dma_buffer(I2S_PORT1);
+  DebugPrintln("I2S amp driver installed.");
   return VOIPPHONE_OK;
 }
 
 //
-// Initialize i2s microphone
+// Initialize i2s microphone (INMP441 на I2S_PORT0)
 //
 
 int VOIPPhone::initi2smic() {
   esp_err_t err;
-  // The I2S config as per the example
+
+  // Инициализация пина L/R для микрофона INMP441 (например, пин 23 в LOW)
+  pinMode(23, OUTPUT);
+  digitalWrite(23, LOW);
+
   const i2s_config_t i2s_config = {
-      .mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_RX), // Receive, not transfer
-      .sample_rate = SAMPLE_RATE,                         // 16KHz
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT, // could only get it to work with 32bits
-      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, // although the SEL config should be left, it seems to transmit on right
-      .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
-      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,     // Interrupt level 1
-      .dma_buf_count = 8,                           // Увеличиваем число буферов до 8
-      .dma_buf_len = 64                             // Увеличиваем размер буфера с 8 до 64 сэмплов
+      .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
+      .sample_rate = SAMPLE_RATE,                    // 16000 Гц
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,  // 16 бит
+      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+      .communication_format = I2S_COMM_FORMAT_STAND_I2S, // Стандартный I2S формат
+      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+      .dma_buf_count = 8,
+      .dma_buf_len = 64,
+      .use_apll = false,
+      .tx_desc_auto_clear = false,
+      .fixed_mclk = 0
   };
-  // The pin config as per the setup
+
   const i2s_pin_config_t pin_config = {
-      .bck_io_num = 14,   // BCKL SCK
-      .ws_io_num = 15,    // LRCL WS
-      .data_out_num = -1, // not used (only for speakers)
-      .data_in_num = 32   // DOUT SD
+      .mck_io_num = I2S_PIN_NO_CHANGE,
+      .bck_io_num = 14,       // BCKL SCK
+      .ws_io_num = 15,        // LRCL WS
+      .data_out_num = -1,     // не используется
+      .data_in_num = 32       // DOUT SD
   };
-  // Configuring the I2S driver and pins.
-  // This pfunction must be called before any I2S driver read/write operations.
+
   DebugPrintln("Init i2s mems...");
   err = i2s_driver_install(I2S_PORT0, &i2s_config, 0, NULL);
   if (err != ESP_OK) {
-    Serial.printf("Failed installing driver: %d\n", err);
+    Serial.printf("Failed installing mic driver: %d\n", err);
     return VOIPPHONE_ERROR_MIC_I2S_DRIVER;
   }
   err = i2s_set_pin(I2S_PORT0, &pin_config);
   if (err != ESP_OK) {
-    Serial.printf("Failed setting pin: %d\n", err);
+    Serial.printf("Failed setting mic pin: %d\n", err);
     return VOIPPHONE_ERROR_MIC_PIN;
   }
-  DebugPrintln("I2S driver installed.");
+  DebugPrintln("I2S mic driver installed.");
   return VOIPPHONE_OK;
 }
 
@@ -218,19 +221,16 @@ int VOIPPhone::initi2smic() {
 // Read from microphone
 //
 
-esp_err_t VOIPPhone::readFromMic(void *dest,size_t size,size_t *bytes_read) {
-  return i2s_read(I2S_PORT0,dest,size,bytes_read,portMAX_DELAY); // no timeout
+esp_err_t VOIPPhone::readFromMic(void *dest, size_t size, size_t *bytes_read) {
+  return i2s_read(I2S_PORT0, dest, size, bytes_read, portMAX_DELAY);
 }
 
-esp_err_t VOIPPhone::writeToAmp(const void *src,size_t size, size_t *bytes_written) {
-  return i2s_write(I2S_PORT1,src,size,bytes_written,portMAX_DELAY);
+esp_err_t VOIPPhone::writeToAmp(const void *src, size_t size, size_t *bytes_written) {
+  return i2s_write(I2S_PORT1, src, size, bytes_written, portMAX_DELAY);
 }
 
 //
 // Send RTP packet every 20ms
-//
-//
-// Send RTP packet with test sine wave instead of mic
 //
 void VOIPPhone::tx_rtp(){
   static uint32_t last_send_time = 0;
@@ -238,28 +238,22 @@ void VOIPPhone::tx_rtp(){
   
   if (last_send_time != 0) {
     uint32_t diff = now - last_send_time;
-    
-    // Если разница больше 10 секунд — это старт нового звонка.
-    // Просто обновляем таймер, но НЕ делаем return, чтобы пакет отправился!
     if (diff > 10000) {
       last_send_time = now;
-    }
-    // Если это текущий разговор, проверяем на реальные задержки (> 35 мс)
-    else if (diff > 35) {
+    } else if (diff > 35) {
       Serial.printf("DEBUG_RTP| Warning: RTP packet interval too long: %u ms\n", diff);
     }
   }
   
-  // Если это самый первый запуск в жизни (last_send_time == 0)
   if (last_send_time == 0) {
     last_send_time = now;
   } else {
-    last_send_time = now; // обновляем для следующего пакета
+    last_send_time = now;
   }
 
   uint8_t temp[160];
   size_t bytes_read = 0;
-  int32_t i2s_buffer[160]; 
+  int16_t i2s_buffer[160]; 
   
   static uint16_t sequenceNumber = 0;
   const uint32_t ssrc = 3124150;
@@ -267,39 +261,24 @@ void VOIPPhone::tx_rtp(){
   RTPPacket txRTPpkg;
   uint8_t packetBuffer[255];
 
-  // Замеряем время чтения с микрофона (полезно для поиска лагов I2S)
-  uint32_t t_start = micros();
   esp_err_t result = readFromMic(i2s_buffer, sizeof(i2s_buffer), &bytes_read);
-  uint32_t t_elapsed = micros() - t_start;
-
-  // Логируем, если чтение заняло слишком много времени (> 15 мс) или вернуло ошибку
-  if (t_elapsed > 15000) {
-    Serial.printf("DEBUG_MIC| Warning: Slow I2S read: %u us, bytes: %u\n", t_elapsed, bytes_read);
-  }
 
   if (result == ESP_OK && bytes_read > 0) {
-    int samples_read = bytes_read / sizeof(int32_t);
-    
-    // Проверка на "абсолютную тишину" от микрофона (если все сэмплы нулевые)
-    bool is_silent = true;
+    int samples_read = bytes_read / sizeof(int16_t);
     
     for(int i = 0; i < 160; i++) {
       int16_t sample = 0;
       if (i < samples_read) {
         int32_t raw_sample = i2s_buffer[i];
-        if (raw_sample != 0) is_silent = false;
-        sample = (int16_t)(raw_sample >> 16); 
+        // Буст микрофона через mic_gain
+        raw_sample = raw_sample * mic_gain;
+        if (raw_sample > 32767) raw_sample = 32767;
+        if (raw_sample < -32768) raw_sample = -32768;
+        sample = (int16_t)raw_sample;
       }
       temp[i] = ALaw_Encode(sample);
     }
-
-    // Если микрофон внезапно отдает сплошные нули (кратковременный срыв синхронизации I2S)
-    if (is_silent) {
-      // Можно раскомментировать для отладки: Serial.println("DEBUG_MIC| Mic buffer is completely silent");
-    }
-
   } else {
-    Serial.printf("DEBUG_MIC| Error reading mic! err=0x%x, bytes=%u\n", result, bytes_read);
     memset(temp, 0xD5, 160); 
   }
 
@@ -322,32 +301,65 @@ void VOIPPhone::tx_rtp(){
 }
 
 //
-// Handle Rx RTP packages Port 1234
+// Handle Rx RTP packages Port 1234 (с апсэмплингом 8кГц -> 16кГц)
 //
 void VOIPPhone::handleIncommingRTP(void) {
-  int16_t buffer[500];
+  int16_t upsampled_buffer[500]; 
   RTPPacket rxRTPpkg;
   
   packetSize = rtpudp.parsePacket();
+  
+  // 1. Отладка: фиксируем сам факт прихода пакета на UDP-порт
+  if (packetSize > 0) {
+    // Раскомментируйте строку ниже, если хотите видеть каждый пришедший пакет (будет много логов):
+    // Serial.printf("DEBUG_RTP_RX| Packet size: %d from %s:%d\n", packetSize, rtpudp.remoteIP().toString().c_str(), rtpudp.remotePort());
+
+    // Если пакет пришел, но мы еще не "в звонке" (флаг сброшен)
+    if (!rx_streamisrunning) {
+      Serial.println("DEBUG_RTP_RX| WARNING: RTP packet received, but rx_streamisrunning is FALSE (flushed)!");
+    }
+  }
+
   if (packetSize > 0 && rx_streamisrunning) {
     packetSize = rtpudp.read(rtpbuffer, sizeof(rtpbuffer));
     rxRTPpkg = RTPPacket();
     rtppkgsize = rxRTPpkg.deserialize(rtpbuffer, packetSize);
-    for(int i=0;i<rtppkgsize;i++) {
-      buffer[i] = (ALaw_Decode((*(rxRTPpkg.getPayload()+i))))*amp_gain;
-      // echocompensation. calculate level.
-      if(echocompensation) {
-        level = (level + abs(buffer[i])) / 2;
-      }
+    
+    // Проверка успешной распаковки RTP
+    static uint32_t success_packets = 0;
+    success_packets++;
+    if (success_packets % 50 == 0) { // Выводим каждые 50 пакетов (~раз в секунду)
+      Serial.printf("DEBUG_RTP_RX| Successfully processed %u packets. Payload size: %d\n", success_packets, rtppkgsize);
     }
+
+    int dst_idx = 0;
+    for(int i = 0; i < rtppkgsize; i++) {
+      int16_t decoded_sample = (ALaw_Decode((*(rxRTPpkg.getPayload() + i)))) * amp_gain;
+      
+      if(echocompensation) {
+        level = (level + abs(decoded_sample)) / 2;
+      }
+      
+      // Апсэмплинг 8кГц -> 16кГц
+      upsampled_buffer[dst_idx++] = decoded_sample;
+      upsampled_buffer[dst_idx++] = decoded_sample; 
+    }
+    
     if(echocompensation && (level > ec_threshold_level)) {
       echodamping = echodamping_value;
     } else {
       echodamping = 1;
     }
+    
     size_t num_bytes_write;
-    writeToAmp(buffer,sizeof(int16_t)*rtppkgsize,&num_bytes_write);
-  } else {
+    esp_err_t write_res = writeToAmp(upsampled_buffer, sizeof(int16_t) * dst_idx, &num_bytes_write);
+    
+    // Отладка записи в усилитель (если вдруг зависает или возвращает ошибку)
+    if (write_res != ESP_OK) {
+      Serial.printf("DEBUG_AMP| Error writing to MAX98357A: 0x%x\n", write_res);
+    }
+
+  } else if (packetSize > 0) {
     rtpudp.flush();
   }
 }
@@ -356,22 +368,21 @@ void VOIPPhone::handleIncommingRTP(void) {
 // Starting Tx RTP stream if call established
 //
 void VOIPPhone::handleOutgoingRTP(void) {
-  if( sip->audioport[0] != '\0' && !tx_streamisrunning ) {
+  if(sip->audioport[0] != '\0' && !tx_streamisrunning) {
     tx_streamisrunning = true;
     DebugPrint("Starting stream...");
-    i2s_start(I2S_PORT0); //mems
+    i2s_start(I2S_PORT0); // mems
     tx_streamticker.attach_ms(20, VOIPPhone::tx_rtp);
     DebugPrintln("[OK]");
-  } else if( sip->audioport[0] == '\0' && tx_streamisrunning ) {
-    // Hangup. Stopping i2s transmission and stopping tx rtp stream
+  } else if(sip->audioport[0] == '\0' && tx_streamisrunning) {
     tx_streamisrunning = false;
     rx_streamisrunning = false;
     rtppkgsize = -1;
     DebugPrintln("Stream stopped.");
     tx_streamticker.detach();
     DebugPrint("Stopping i2s transmission...");
-    i2s_stop(I2S_PORT0); //mems
-    i2s_stop(I2S_PORT1); //amp
+    i2s_stop(I2S_PORT0); // mems
+    i2s_stop(I2S_PORT1); // amp
     DebugPrintln("[OK]");
   }
 }
@@ -381,4 +392,3 @@ void VOIPPhone::setEchoCompensation(bool enable, long threshold_level, uint8_t d
   ec_threshold_level = threshold_level;
   echodamping_value = damping;
 }
-
