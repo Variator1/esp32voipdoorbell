@@ -128,33 +128,34 @@ bool VOIPPhone::isBusy(void) {
 // Initialize i2s amplifier (MAX98357A на I2S_PORT1)
 //
 
+//
+// Initialize i2s amplifier (MAX98357A на I2S_PORT1)
+//
+
 int VOIPPhone::initi2samp() {
   esp_err_t err;
 
-  // Инициализация пина SD (Shutdown/Mode) для MAX98357A
   pinMode(AMP_SD_PIN, OUTPUT);
-  digitalWrite(AMP_SD_PIN, HIGH); // Включаем усилитель (нормальный режим работы)
+  digitalWrite(AMP_SD_PIN, HIGH); // Включаем усилитель
 
   const i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-      .sample_rate = SAMPLE_RATE,                    // 16000 Гц (стабильная частота для железа)
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,  // 16 бит
+      .sample_rate = SAMPLE_RATE,                    
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,  
       .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT, 
-      .communication_format = I2S_COMM_FORMAT_STAND_I2S, // Стандартный I2S формат
+      .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB), // Старый формат для v1.0.4
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
       .dma_buf_count = 8,
       .dma_buf_len = 64,
       .use_apll = false,
-      .tx_desc_auto_clear = true,                    // Предотвращает треск при паузах
-      .fixed_mclk = 0
+      .tx_desc_auto_clear = true
   };
 
   const i2s_pin_config_t pin_config = {
-      .mck_io_num = I2S_PIN_NO_CHANGE,
-      .bck_io_num = AMP_BCLK_PIN,    // Использован макрос из voipphone.h (4)
-      .ws_io_num = AMP_LRC_PIN,      // Использован макрос из voipphone.h (5)
-      .data_out_num = AMP_DOUT_PIN,  // Использован макрос из voipphone.h (18)
-      .data_in_num = -1              // не используется
+      .bck_io_num = AMP_BCLK_PIN,    
+      .ws_io_num = AMP_LRC_PIN,      
+      .data_out_num = AMP_DOUT_PIN,  
+      .data_in_num = -1              
   };
 
   DebugPrintln("Init i2s amp...");
@@ -180,30 +181,27 @@ int VOIPPhone::initi2samp() {
 int VOIPPhone::initi2smic() {
   esp_err_t err;
 
-  // Инициализация пина L/R для микрофона INMP441
   pinMode(MIC_LR_PIN, OUTPUT);
   digitalWrite(MIC_LR_PIN, LOW); // LOW = Левый канал
 
   const i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-      .sample_rate = SAMPLE_RATE,                    // 16000 Гц
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,  // 16 бит
+      .sample_rate = SAMPLE_RATE,                    
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,  
       .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-      .communication_format = I2S_COMM_FORMAT_STAND_I2S, // Стандартный I2S формат
+      .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB), // Старый формат для v1.0.4
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
       .dma_buf_count = 8,
       .dma_buf_len = 64,
       .use_apll = false,
-      .tx_desc_auto_clear = false,
-      .fixed_mclk = 0
+      .tx_desc_auto_clear = false
   };
 
   const i2s_pin_config_t pin_config = {
-      .mck_io_num = I2S_PIN_NO_CHANGE,
-      .bck_io_num = MIC_BCLK_PIN,    // Использован макрос из voipphone.h (14)
-      .ws_io_num = MIC_WS_PIN,       // Использован макрос из voipphone.h (15)
-      .data_out_num = -1,            // не используется
-      .data_in_num = MIC_DIN_PIN     // Использован макрос из voipphone.h (32)
+      .bck_io_num = MIC_BCLK_PIN,    
+      .ws_io_num = MIC_WS_PIN,       
+      .data_out_num = -1,            
+      .data_in_num = MIC_DIN_PIN     
   };
 
   DebugPrintln("Init i2s mems...");
