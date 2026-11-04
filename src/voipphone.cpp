@@ -223,6 +223,7 @@ void VOIPPhone::tx_rtp(){
   RTPPacket txRTPpkg;
   uint8_t packetBuffer[255];
 
+  // Читаем с нулевым таймаутом с независимого порта микрофона I2S_NUM_0
   esp_err_t result = i2s_read(I2S_NUM_0, i2s_buffer, sizeof(i2s_buffer), &bytes_read, 0);
 
   if (result == ESP_OK && bytes_read > 0) {
@@ -232,14 +233,8 @@ void VOIPPhone::tx_rtp(){
     for (int i = 0; i < samples_read && dst_idx < 160; i += 2) {
       int32_t raw_sample = i2s_buffer[i];
       
-      // Сдвигаем на 14 бит для корректного преобразования 24-бит INMP441 в int16_t
-      int16_t sample = (int16_t)(raw_sample >> 14); 
-      
-      // Отладочный вывод (срабатывает раз в секунду, чтобы не забивать лог)
-      static int log_cnt = 0;
-      if (++log_cnt % 50 == 0) {
-          Serial.printf("DEBUG_MIC| raw: %d, sample: %d\n", (int)raw_sample, (int)sample);
-      }
+      // Точный сдвиг для 24-битных данных INMP441, использовавшийся в рабочем коде
+      int16_t sample = (int16_t)(raw_sample >> 11); 
       
       int32_t amplified = sample * mic_gain;
       if (amplified > 32767) amplified = 32767;
@@ -249,7 +244,7 @@ void VOIPPhone::tx_rtp(){
     }
     
     while (dst_idx < 160) {
-      temp[dst_idx++] = 0xD5;
+      temp[dst_idx++] = 0xD5; // Заполнение тишиной (A-law silence)
     }
   } else {
     memset(temp, 0xD5, 160); 
