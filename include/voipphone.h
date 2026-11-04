@@ -1,7 +1,17 @@
 #ifndef _VOIPPHONE_h_
 #define _VOIPPHONE_h_
 
-#define AMP_SD_PIN 22 // Свободный пин для управления Shutdown усилителя
+/ --- Настройки для МИКРОФОНА INMP441 (I2S_NUM_0) ---
+#define MIC_BCLK    14
+#define MIC_WS      15
+#define MIC_DIN     32
+#define MIC_LR_PIN  23 
+
+// --- Настройки для УСИЛИТЕЛЯ MAX98357A (I2S_NUM_1) ---
+#define AMP_BCLK    4
+#define AMP_LRC     5
+#define AMP_DOUT    18
+#define AMP_SD_PIN  19
 
 #include <Arduino.h>
 #include <driver/i2s.h>
@@ -58,8 +68,8 @@ class VOIPPhone {
     void handleOutgoingRTP(void);
     void handleSIP(void);
 
-    static const i2s_port_t I2S_PORT0 = I2S_NUM_0; // mems
-    const i2s_port_t I2S_PORT_AMP = I2S_NUM_0;        // amplifier
+    static const i2s_port_t I2S_PORT0 = I2S_NUM_0; // Микрофон
+    const i2s_port_t I2S_PORT_AMP = I2S_NUM_1;     // Усилитель
 
     static WiFiUDP rtpudp;
    
