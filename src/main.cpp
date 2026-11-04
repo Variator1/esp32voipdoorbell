@@ -20,7 +20,7 @@ HTTPUpdateServer httpUpdate;
 VOIPPhone doorphone;
 bool doorphonerunning = false;
 
-ClickButton button1(4, LOW, CLICKBTN_PULLUP);
+ClickButton button1(13, LOW, CLICKBTN_PULLUP);
 ClickButton button2(2, LOW, CLICKBTN_PULLUP);
 ClickButton button3(15, LOW, CLICKBTN_PULLUP);
 
