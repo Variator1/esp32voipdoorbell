@@ -308,12 +308,8 @@ void VOIPPhone::handleIncommingRTP(void) {
   
   packetSize = rtpudp.parsePacket();
   
-  // 1. Отладка: фиксируем сам факт прихода пакета на UDP-порт
+  // Отладка: фиксируем факт прихода пакета
   if (packetSize > 0) {
-    // Раскомментируйте строку ниже, если хотите видеть каждый пришедший пакет (будет много логов):
-    // Serial.printf("DEBUG_RTP_RX| Packet size: %d from %s:%d\n", packetSize, rtpudp.remoteIP().toString().c_str(), rtpudp.remotePort());
-
-    // Если пакет пришел, но мы еще не "в звонке" (флаг сброшен)
     if (!rx_streamisrunning) {
       Serial.println("DEBUG_RTP_RX| WARNING: RTP packet received, but rx_streamisrunning is FALSE (flushed)!");
     }
@@ -324,10 +320,10 @@ void VOIPPhone::handleIncommingRTP(void) {
     rxRTPpkg = RTPPacket();
     rtppkgsize = rxRTPpkg.deserialize(rtpbuffer, packetSize);
     
-    // Проверка успешной распаковки RTP
+    // Счетчик успешно обработанных пакетов для Serial Monitor
     static uint32_t success_packets = 0;
     success_packets++;
-    if (success_packets % 50 == 0) { // Выводим каждые 50 пакетов (~раз в секунду)
+    if (success_packets % 50 == 0) {
       Serial.printf("DEBUG_RTP_RX| Successfully processed %u packets. Payload size: %d\n", success_packets, rtppkgsize);
     }
 
@@ -339,7 +335,7 @@ void VOIPPhone::handleIncommingRTP(void) {
         level = (level + abs(decoded_sample)) / 2;
       }
       
-      // Апсэмплинг 8кГц -> 16кГц
+      // АПСЭМПЛИНГ 8кГц -> 16кГц: дублируем сэмпл для согласования с железом
       upsampled_buffer[dst_idx++] = decoded_sample;
       upsampled_buffer[dst_idx++] = decoded_sample; 
     }
@@ -353,7 +349,6 @@ void VOIPPhone::handleIncommingRTP(void) {
     size_t num_bytes_write;
     esp_err_t write_res = writeToAmp(upsampled_buffer, sizeof(int16_t) * dst_idx, &num_bytes_write);
     
-    // Отладка записи в усилитель (если вдруг зависает или возвращает ошибку)
     if (write_res != ESP_OK) {
       Serial.printf("DEBUG_AMP| Error writing to MAX98357A: 0x%x\n", write_res);
     }
